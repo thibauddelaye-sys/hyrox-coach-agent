@@ -35,3 +35,10 @@ Thumbs.db
 *.log
 .cache/
 node_modules/
+
+# Claude Code memory (personal, not project code)
+.claude/
+
+# Scratch / temp files
+mcp_sort.txt
+req.txt

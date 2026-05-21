@@ -1,0 +1,1252 @@
+{
+  "name": "Hyrox - E - Weekly Plan Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "47 9 * * 4"
+            }
+          ]
+        }
+      },
+      "id": "cc9900c4-99ed-45ba-b821-1052a6f384dc",
+      "name": "Every Friday 13:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -2304,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbloi8D9r6OWC5jXp",
+          "mode": "id",
+          "cachedResultName": "athlete_profile"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "id": "3e3ca714-28e1-4636-bb61-2c8ef2546164",
+      "name": "Read Athlete Profile",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        -2016,
+        192
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll"
+      },
+      "id": "f77b67fe-faaf-46eb-91fd-84e1d24ccd68",
+      "name": "Read Last 21 Days Strava",
+      "type": "n8n-nodes-base.strava",
+      "typeVersion": 1.1,
+      "position": [
+        -1728,
+        192
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "stravaOAuth2Api": {
+          "id": "YY7ao1EAbjKCxzYm",
+          "name": "Strava account - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const athleteData = $('Read Athlete Profile').first().json;\nconst athlete = athleteData.fields ?? athleteData;\n\nconst rawDate = athlete.hyrox_target_date || '2026-07-18';\nconst targetDate = new Date(rawDate);\nconst now = new Date();\nconst daysToRace = Math.floor((targetDate - now) / (1000 * 60 * 60 * 24));\nconst weeksToRace = Math.ceil(daysToRace / 7);\n\nlet phase;\nif (weeksToRace <= 2) phase = 'Taper';\nelse if (weeksToRace <= 5) phase = 'Peak';\nelse if (weeksToRace <= 12) phase = 'Build';\nelse phase = 'Base';\n\nconst totalPrepWeeks = 20;\nconst weekNumber = Math.max(1, totalPrepWeeks - weeksToRace + 1);\n\nconst today = new Date();\nconst dayOfWeek = today.getDay();\nconst daysUntilMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);\nconst nextMonday = new Date(today);\nnextMonday.setDate(today.getDate() + daysUntilMonday);\nconst nextSunday = new Date(nextMonday);\nnextSunday.setDate(nextMonday.getDate() + 6);\n\nconst isoDate = d => d.toISOString().slice(0, 10);\n\nreturn [{\n  json: {\n    phase,\n    weeks_to_race: weeksToRace,\n    week_number: weekNumber,\n    week_start: isoDate(nextMonday),\n    week_end: isoDate(nextSunday),\n    week_dates: Array.from({length: 7}, (_, i) => {\n      const d = new Date(nextMonday);\n      d.setDate(nextMonday.getDate() + i);\n      return isoDate(d);\n    })\n  }\n}];"
+      },
+      "id": "9b1f5ed1-6086-450b-a867-cb34a3d02ef9",
+      "name": "Compute Phase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1440,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "thibaud.delaye@gmail.com",
+          "mode": "list",
+          "cachedResultName": "thibaud.delaye@gmail.com"
+        },
+        "timeMin": "={{ $json.week_start + 'T00:00:00' }}",
+        "timeMax": "={{ $json.week_end + 'T23:59:59' }}",
+        "options": {}
+      },
+      "id": "d739190b-85bc-4a5a-bbcd-d0ff095e740c",
+      "name": "Read Next Week Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -1152,
+        192
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "XA0EjQ6GROQRtCYi",
+          "name": "Google Calendar account - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawItems = $input.all();\nconst calendarItems = rawItems.filter(item => item.json && item.json.summary);\n\nconst computePhase = $('Compute Phase').first().json;\n\nconst calendarContext = calendarItems.length === 0\n  ? 'No calendar events next week.'\n  : calendarItems.map(item => {\n    const event = item.json;\n    const startDate = (event.start && event.start.dateTime)\n      ? event.start.dateTime.substring(0, 10)\n      : ((event.start && event.start.date) ? event.start.date : '?');\n    const summary = event.summary || 'Untitled event';\n    const location = event.location ? ' [Location: ' + event.location + ']' : '';\n    return startDate + ': ' + summary + location;\n  }).join('\\n');\n\nreturn [{\n  json: {\n    phase: computePhase.phase,\n    weeks_to_race: computePhase.weeks_to_race,\n    week_number: computePhase.week_number,\n    week_start: computePhase.week_start,\n    week_end: computePhase.week_end,\n    week_dates: computePhase.week_dates,\n    calendar_context: calendarContext\n  }\n}];"
+      },
+      "id": "bebca751-5e86-48ce-9fdf-21521b510dc9",
+      "name": "Build Calendar Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -864,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ep-001",
+              "name": "athlete_name",
+              "value": "={{ $('Read Athlete Profile').first().json.fields.name || $('Read Athlete Profile').first().json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "ep-002",
+              "name": "target_division",
+              "value": "={{ $('Read Athlete Profile').first().json.fields.hyrox_target_division || $('Read Athlete Profile').first().json.hyrox_target_division || 'Open Men' }}",
+              "type": "string"
+            },
+            {
+              "id": "ep-003",
+              "name": "phase",
+              "value": "={{ $json.phase }}",
+              "type": "string"
+            },
+            {
+              "id": "ep-004",
+              "name": "weeks_to_race",
+              "value": "={{ $json.weeks_to_race }}",
+              "type": "number"
+            },
+            {
+              "id": "ep-005",
+              "name": "week_number",
+              "value": "={{ $json.week_number }}",
+              "type": "number"
+            },
+            {
+              "id": "ep-006",
+              "name": "week_start",
+              "value": "={{ $json.week_start }}",
+              "type": "string"
+            },
+            {
+              "id": "ep-007",
+              "name": "week_end",
+              "value": "={{ $json.week_end }}",
+              "type": "string"
+            },
+            {
+              "id": "ep-008",
+              "name": "week_dates_json",
+              "value": "={{ JSON.stringify($json.week_dates) }}",
+              "type": "string"
+            },
+            {
+              "id": "ep-009",
+              "name": "equipment_home",
+              "value": "={{ Array.isArray($('Read Athlete Profile').first().json.fields.equipment_home) ? $('Read Athlete Profile').first().json.fields.equipment_home.join(', ') : ($('Read Athlete Profile').first().json.fields.equipment_home || '') }}",
+              "type": "string"
+            },
+            {
+              "id": "ep-010",
+              "name": "recent_training_summary",
+              "value": "={{ $('Read Last 21 Days Strava').all().length === 0 ? 'No recent activities' : $('Read Last 21 Days Strava').all().map(a => '- ' + a.json.name + ' (' + a.json.type + ', ' + Math.round(a.json.distance / 100) / 10 + 'km, ' + Math.round(a.json.moving_time / 60) + 'min, on ' + a.json.start_date_local.substring(0,10) + ')').join('\\n') }}",
+              "type": "string"
+            },
+            {
+              "id": "ep-011",
+              "name": "calendar_context",
+              "value": "={{ $json.calendar_context }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "62ef69ea-dc90-4265-9073-6305c1373e4d",
+      "name": "Package Planning Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -576,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Athlete: ' + $json.athlete_name + '\\nTarget division: ' + $json.target_division + '\\nWeeks to race: ' + $json.weeks_to_race + '\\nPhase: ' + $json.phase + '\\nWeek number in training cycle: ' + $json.week_number + '\\nWeek to plan: ' + $json.week_start + ' to ' + $json.week_end + '\\nWeek dates (must use exactly): ' + $json.week_dates_json + '\\nEquipment available: ' + $json.equipment_home + '\\n\\nRecent training (last 21 days):\\n' + $json.recent_training_summary + '\\n\\nCalendar events next week (for travel day detection):\\n' + $json.calendar_context + '\\n\\nGenerate the 7-day training plan, the weekly day-by-day nutrition program, AND the batch cooking option as structured JSON. Use the knowledge base for periodization and nutrition decisions. Both grocery lists must be complete enough to shop for the full week.' }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are Hyrox Coach, building the upcoming weekly training plan AND nutrition program for a single athlete preparing for a Hyrox race. You combine the roles of strength & conditioning coach, endurance coach, and sports nutritionist.\n\nTraining programming principles:\n- Base phase: aerobic capacity, technique, low-medium intensity, 4-5 sessions/week\n- Build phase: introduce Hyrox simulations and intensity, 5-6 sessions/week\n- Peak phase: race-pace work, sharpen, 5 sessions/week with reduced volume\n- Taper phase: reduce volume 40-60%, maintain intensity, 4 sessions/week\n\nSession types: Hyrox simulation, Strength, Z2 endurance, Intervals, Long run, Rest, Mobility, Active recovery.\n\nTRAVEL DAY ADAPTATION:\nThe athlete's Google Calendar events for the week are provided in calendar_context. Each line follows the format: YYYY-MM-DD: Event title [Location: City/Place]. Analyse each day:\n- If a day's event has a Location field indicating a non-local place (another city, airport, hotel, train station, country), treat that day as a TRAVEL DAY.\n- If the event title itself suggests travel or being away (\"en deplacement\", \"trip\", \"voyage\", \"conference\", \"overnight\"), also treat it as a TRAVEL DAY even without a location field.\n- On TRAVEL DAYS:\n  * Use only 'Active recovery' or 'Z2 endurance' session types\n  * Cap duration_min at 45\n  * Set intensity to 'easy'\n  * In the notes field write: \"Travel day -- [event title][ @ location if available]. Adapted to short easy effort.\"\n- On days with no calendar events or only local/online events, apply normal periodization programming.\n\nNutrition programming principles:\n- CALORIC CALIBRATION — use these ranges for a 75–85 kg male Hyrox athlete. Day type dictates the target; NEVER set every day the same:\n  * Rest / Mobility: 1900–2200 kcal\n  * Active recovery / easy Z2 under 45 min: 2100–2400 kcal\n  * Z2 endurance / Strength (moderate, 45–75 min): 2400–2700 kcal\n  * Intervals / Long run / Hyrox simulation (hard or max, 60–120 min): 2700–3100 kcal\n  Rest days MUST be at least 400 kcal below hard-session days. Do not default to 3000+ kcal on low-intensity days.\n- CARBOHYDRATE PERIODIZATION — scale carbs with the same tiers: Rest/easy: 2–3 g/kg. Moderate: 3–5 g/kg. Hard/simulation: 5–7 g/kg.\n- PROTEIN — constant at 1.8–2.2 g/kg daily regardless of session type.\n- Pre-workout (hard sessions only): 1–2 g/kg fast-digesting carbs 60–90 min before; keep fat under 10 g.\n- Post-workout: 20–40 g protein within 30 min for hard sessions; leucine threshold ~2.5 g matters.\n- Grocery list must be concrete and shoppable (real foods, specific quantities -- e.g. 'Chicken breast 1.5kg', 'Oats 500g', 'Bananas x6').\n- On travel days, keep nutrition practical: portable snacks, protein bars, easy high-protein options the athlete can find while travelling.\n\nBATCH COOKING OPTION:\nAt the end, suggest 1-2 dishes (e.g. chili, bolognese, chicken curry, lentil soup) that the athlete could cook on Sunday if they do not have time to cook during the week. This is a FALLBACK option -- not tied to specific days. Choose dishes that:\n- Together provide 6-8+ servings covering most lunches and dinners\n- Are macro-appropriate for the week's dominant training load\n- Store well in the fridge for 5 days or freeze well\n- Take under 45 min of active cooking on a Sunday\nThe grocery_list inside batch_cooking covers ONLY the ingredients for those dishes and is separate from the weekly nutrition grocery list.\n\nCHEAT MEAL POLICY:\n- Plan exactly 1 structured cheat meal per week.\n- Default day: Saturday. Automatically move it to whichever day in calendar_context has a social event, celebration, or going-out (wedding, birthday party, dinner out). If multiple, pick the most significant.\n- The cheat meal replaces dinner on that day only. All other meal slots stay disciplined.\n- On cheat meal day: add 400-600 kcal above that day's training-load baseline. Replace the dinner slot in meals with 'Dinner: Cheat meal -- enjoy freely, no tracking needed'.\n- Keep pre_workout and post_workout slots fully disciplined on cheat meal day.\n- In that daily_plan notes write: 'Cheat meal day (dinner) -- planned indulgence. Back on track tomorrow morning.'\n\nUse the hyrox_knowledge_base tool to ground BOTH training and nutrition recommendations in the HYROX official manual, Joe Friel periodization, and ISSN nutrient timing guidelines. Cite sources you actually use.\n\nYou MUST produce exactly 7 days in 'sessions'. Match each to an exact date provided. Plan should reflect the phase, the athlete's recent training load, equipment available, and any travel constraints from the calendar.\n\nFor each session produce: date, phase, week_number, session_type, description (concrete, coaching-oriented, max 2 sentences), duration_min, intensity (easy/moderate/hard/max), notes, status='planned'.\n\nFor nutrition produce a day-by-day plan in daily_plans (7 entries): date, calories, protein_g, carbs_g, fat_g, meals (chronological time-slot string: 'Breakfast: [foods]' / 'Pre-workout ([X] min before): [foods]' omit on rest days / 'Lunch: [foods]' / 'Post-workout (within [X] min): [foods]' omit on rest days / 'Dinner: [foods]' / 'Snack: [foods]' if applicable -- keep each slot concise, 1 line). For each daily_plan entry, also produce daily_groceries: an array of the exact raw ingredients and quantities needed only for that day's meals (e.g. 'Chicken breast 180g', 'Sweet potato 200g'). No cooking instructions -- just shoppable items. Also produce grocery_list for the full week (union of all daily_groceries, deduplicated and aggregated)."
+        }
+      },
+      "id": "b5aefe16-14a4-40db-a8a7-d253d2885450",
+      "name": "Plan Week AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -288,
+        192
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "2aa8d7a7-9e96-456b-9eca-0aa58643219c",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -288,
+        384
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YGWEA0vPHv8srLC6",
+          "name": "OpenAI - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"required\": [\n    \"sessions\",\n    \"nutrition\",\n    \"batch_cooking\"\n  ],\n  \"properties\": {\n    \"sessions\": {\n      \"type\": \"array\",\n      \"minItems\": 7,\n      \"maxItems\": 7,\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\n          \"date\",\n          \"phase\",\n          \"week_number\",\n          \"session_type\",\n          \"description\",\n          \"duration_min\",\n          \"intensity\",\n          \"status\"\n        ],\n        \"properties\": {\n          \"date\": {\n            \"type\": \"string\",\n            \"format\": \"date\"\n          },\n          \"phase\": {\n            \"type\": \"string\",\n            \"enum\": [\n              \"Base\",\n              \"Build\",\n              \"Peak\",\n              \"Taper\"\n            ]\n          },\n          \"week_number\": {\n            \"type\": \"integer\"\n          },\n          \"session_type\": {\n            \"type\": \"string\",\n            \"enum\": [\n              \"Hyrox simulation\",\n              \"Strength\",\n              \"Z2 endurance\",\n              \"Intervals\",\n              \"Long run\",\n              \"Rest\",\n              \"Mobility\",\n              \"Active recovery\"\n            ]\n          },\n          \"description\": {\n            \"type\": \"string\"\n          },\n          \"duration_min\": {\n            \"type\": \"integer\"\n          },\n          \"intensity\": {\n            \"type\": \"string\",\n            \"enum\": [\n              \"easy\",\n              \"moderate\",\n              \"hard\",\n              \"max\"\n            ]\n          },\n          \"notes\": {\n            \"type\": \"string\"\n          },\n          \"status\": {\n            \"type\": \"string\",\n            \"enum\": [\n              \"planned\"\n            ]\n          }\n        }\n      }\n    },\n    \"nutrition\": {\n      \"type\": \"object\",\n      \"required\": [\n        \"daily_plans\",\n        \"grocery_list\"\n      ],\n      \"properties\": {\n        \"daily_plans\": {\n          \"type\": \"array\",\n          \"minItems\": 7,\n          \"maxItems\": 7,\n          \"items\": {\n            \"type\": \"object\",\n            \"required\": [\n              \"date\",\n              \"calories\",\n              \"protein_g\",\n              \"carbs_g\",\n              \"fat_g\",\n              \"meals\",\n              \"daily_groceries\"\n            ],\n            \"properties\": {\n              \"date\": {\n                \"type\": \"string\"\n              },\n              \"calories\": {\n                \"type\": \"integer\"\n              },\n              \"protein_g\": {\n                \"type\": \"integer\"\n              },\n              \"carbs_g\": {\n                \"type\": \"integer\"\n              },\n              \"fat_g\": {\n                \"type\": \"integer\"\n              },\n              \"meals\": {\n                \"type\": \"string\",\n                \"description\": \"All food consumed that day in chronological time slots separated by ' / ': 'Breakfast: [foods]' / 'Pre-workout ([X] min before): [foods]' (omit on rest/active-recovery days) / 'Lunch: [foods]' / 'Post-workout (within [X] min): [foods]' (omit on rest days) / 'Dinner: [foods]' / 'Snack: [foods if applicable]'. Every item must be counted in the macro totals -- no food outside this string.\"\n              },\n              \"daily_groceries\": {\n                \"type\": \"array\",\n                \"items\": { \"type\": \"string\" },\n                \"description\": \"Exact raw ingredients + quantities needed only for this day. E.g. ['Chicken breast 180g', 'Sweet potato 200g']. No cooking instructions.\"\n              }\n            }\n          }\n        },\n        \"grocery_list\": {\n          \"type\": \"array\",\n          \"minItems\": 1,\n          \"items\": {\n            \"type\": \"string\"\n          }\n        }\n      }\n    },\n    \"batch_cooking\": {\n      \"type\": \"object\",\n      \"required\": [\n        \"intro\",\n        \"dishes\",\n        \"grocery_list\"\n      ],\n      \"properties\": {\n        \"intro\": {\n          \"type\": \"string\",\n          \"description\": \"One sentence framing this as the fallback option. E.g. 'Short on time this week? Cook these on Sunday and you are covered for most lunches and dinners.'\"\n        },\n        \"dishes\": {\n          \"type\": \"array\",\n          \"minItems\": 1,\n          \"maxItems\": 2,\n          \"items\": {\n            \"type\": \"object\",\n            \"required\": [\n              \"name\",\n              \"instructions\",\n              \"servings\",\n              \"macros_per_serving\"\n            ],\n            \"properties\": {\n              \"name\": {\n                \"type\": \"string\"\n              },\n              \"instructions\": {\n                \"type\": \"string\",\n                \"description\": \"3-5 sentence recipe. No jargon.\"\n              },\n              \"servings\": {\n                \"type\": \"integer\"\n              },\n              \"macros_per_serving\": {\n                \"type\": \"object\",\n                \"required\": [\n                  \"calories\",\n                  \"protein_g\",\n                  \"carbs_g\",\n                  \"fat_g\"\n                ],\n                \"properties\": {\n                  \"calories\": {\n                    \"type\": \"integer\"\n                  },\n                  \"protein_g\": {\n                    \"type\": \"integer\"\n                  },\n                  \"carbs_g\": {\n                    \"type\": \"integer\"\n                  },\n                  \"fat_g\": {\n                    \"type\": \"integer\"\n                  }\n                }\n              }\n            }\n          }\n        },\n        \"grocery_list\": {\n          \"type\": \"array\",\n          \"minItems\": 1,\n          \"items\": {\n            \"type\": \"string\"\n          },\n          \"description\": \"Ingredients for batch cooking dishes ONLY, separate from the weekly grocery list.\"\n        }\n      }\n    }\n  }\n}"
+      },
+      "id": "c40a791c-2752-4907-a951-6a00ce97ce47",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -288,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Hyrox training knowledge, athlete notes, race strategy, nutrition guidance, recovery recommendations, and background reference material.",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "hyrox-knowledge-base",
+          "mode": "list",
+          "cachedResultName": "hyrox-knowledge-base"
+        },
+        "useReranker": true,
+        "options": {}
+      },
+      "id": "194052ba-dc35-4a5a-b9c9-e95576f8c240",
+      "name": "Hyrox Knowledge Base",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        -288,
+        960
+      ],
+      "credentials": {
+        "pineconeApi": {
+          "id": "0L1d2Cx1zDbgkcIR",
+          "name": "Pinecone account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "49807d6c-ea86-4852-aa4e-8e0ec7dd869e",
+      "name": "Reranker Cohere",
+      "type": "@n8n/n8n-nodes-langchain.rerankerCohere",
+      "typeVersion": 1,
+      "position": [
+        -96,
+        1152
+      ],
+      "credentials": {
+        "cohereApi": {
+          "id": "K7YKHElqXH4IjMJC",
+          "name": "Cohere account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "d0fc089a-2d71-45b9-a7d5-d59d72a3b68c",
+      "name": "Embeddings OpenAI",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -288,
+        1152
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YGWEA0vPHv8srLC6",
+          "name": "OpenAI - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "output.sessions",
+        "options": {}
+      },
+      "id": "34c42c8c-1822-473a-acb9-dbcfe7a077d8",
+      "name": "Split Out Sessions",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        432,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblCfdZNzkVH3heRm",
+          "mode": "id",
+          "cachedResultName": "training_plan"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ DateTime.fromISO($json.date).toISODate() }}",
+            "phase": "={{ $json.phase }}",
+            "week_number": "={{ parseInt($json.week_number) }}",
+            "session_type": "={{ $json.session_type === 'Hyrox simulation' ? 'Hyrox Simulation' : $json.session_type === 'Active recovery' ? 'Active Recovery' : $json.session_type }}",
+            "description": "={{ $json.description }}",
+            "duration_min": "={{ parseInt($json.duration_min) }}",
+            "intensity": "={{ $json.intensity }}",
+            "notes": "={{ $json.notes || '' }}",
+            "status": "={{ $json.status }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "phase",
+              "displayName": "phase",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Base",
+                  "value": "Base"
+                },
+                {
+                  "name": "Build",
+                  "value": "Build"
+                },
+                {
+                  "name": "Peak",
+                  "value": "Peak"
+                },
+                {
+                  "name": "Taper",
+                  "value": "Taper"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "week_number",
+              "displayName": "week_number",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "session_type",
+              "displayName": "session_type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Hyrox Simulation",
+                  "value": "Hyrox Simulation"
+                },
+                {
+                  "name": "Strength",
+                  "value": "Strength"
+                },
+                {
+                  "name": "Z2 endurance",
+                  "value": "Z2 endurance"
+                },
+                {
+                  "name": "Intervals",
+                  "value": "Intervals"
+                },
+                {
+                  "name": "Long run",
+                  "value": "Long run"
+                },
+                {
+                  "name": "Rest",
+                  "value": "Rest"
+                },
+                {
+                  "name": "Mobility",
+                  "value": "Mobility"
+                },
+                {
+                  "name": "Active Recovery",
+                  "value": "Active Recovery"
+                },
+                {
+                  "name": "Hiking",
+                  "value": "Hiking"
+                },
+                {
+                  "name": "",
+                  "value": ""
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "duration_min",
+              "displayName": "duration_min",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "intensity",
+              "displayName": "intensity",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "easy",
+                  "value": "easy"
+                },
+                {
+                  "name": "moderate",
+                  "value": "moderate"
+                },
+                {
+                  "name": "hard",
+                  "value": "hard"
+                },
+                {
+                  "name": "max",
+                  "value": "max"
+                },
+                {
+                  "name": "",
+                  "value": ""
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "equipment_required",
+              "displayName": "equipment_required",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "options": [
+                {
+                  "name": "kettlebell 16kg",
+                  "value": "kettlebell 16kg"
+                },
+                {
+                  "name": "kettlebell 24kg",
+                  "value": "kettlebell 24kg"
+                },
+                {
+                  "name": "dumbbells 10kg",
+                  "value": "dumbbells 10kg"
+                },
+                {
+                  "name": "dumbbells 20kg",
+                  "value": "dumbbells 20kg"
+                },
+                {
+                  "name": "pull-up bar",
+                  "value": "pull-up bar"
+                },
+                {
+                  "name": "barbell",
+                  "value": "barbell"
+                },
+                {
+                  "name": "rowing machine",
+                  "value": "rowing machine"
+                },
+                {
+                  "name": "wall ball",
+                  "value": "wall ball"
+                },
+                {
+                  "name": "medicine ball",
+                  "value": "medicine ball"
+                },
+                {
+                  "name": "bands",
+                  "value": "bands"
+                },
+                {
+                  "name": "none",
+                  "value": "none"
+                },
+                {
+                  "name": "",
+                  "value": ""
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "planned",
+                  "value": "planned"
+                },
+                {
+                  "name": "done",
+                  "value": "done"
+                },
+                {
+                  "name": "skipped",
+                  "value": "skipped"
+                },
+                {
+                  "name": "modified",
+                  "value": "modified"
+                },
+                {
+                  "name": "",
+                  "value": ""
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "fde5ba90-0a24-48a8-aac0-65b5eaceb429",
+      "name": "Insert Session into Airtable",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        592,
+        624
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = $('Plan Week AI Agent').first().json.output;\nconst phase = $('Compute Phase').first().json;\n\n// ── Message 1: Training sessions ─────────────────────────────────────────────\nconst sessionLines = output.sessions.map(s => {\n  const travelTag = (s.notes && s.notes.indexOf('Travel day') === 0) ? ' (\\u2708\\ufe0f travel)' : '';\n  return '*' + s.date + travelTag + '* \\u2014 ' + s.session_type + ' (' + s.duration_min + 'min, ' + s.intensity + ')\\n' + s.description;\n}).join('\\n\\n');\n\nconst msg1 = '\\ud83d\\udcc5 *Weekly Plan \\u2014 Week of ' + phase.week_start + '*\\n' +\n  'Phase: ' + phase.phase + ' \\u2014 Week ' + phase.week_number + ' (' + phase.weeks_to_race + ' weeks to race)\\n\\n' +\n  sessionLines;\n\n// ── Message 2: Nutrition + grocery list ──────────────────────────────────────\nconst nutritionLines = output.nutrition.daily_plans.map(d => {\n  const groceries = (d.daily_groceries && d.daily_groceries.length > 0)\n    ? '\\n\\ud83d\\uded2 ' + d.daily_groceries.join(' \\u00b7 ')\n    : '';\n  return '*' + d.date + '* \\u2014 ' + d.calories + ' kcal | ' + d.protein_g + 'g P / ' + d.carbs_g + 'g C / ' + d.fat_g + 'g F\\n' + d.meals + groceries;\n}).join('\\n\\n');\n\nconst msg2 = '\\ud83e\\udd57 *Nutrition \\u2014 day by day*\\n\\n' + nutritionLines;\n\n// ── Message 3: Batch cooking ──────────────────────────────────────────────────\nconst dishLines = output.batch_cooking.dishes.map(d =>\n  '*' + d.name + '* (' + d.servings + ' servings \\u2014 ' +\n  d.macros_per_serving.calories + ' kcal | ' + d.macros_per_serving.protein_g + 'g P / ' +\n  d.macros_per_serving.carbs_g + 'g C / ' + d.macros_per_serving.fat_g + 'g F per serving)\\n' +\n  d.instructions\n).join('\\n\\n');\n\nconst batchGrocery = output.batch_cooking.grocery_list.map(i => '\\u2022 ' + i).join('\\n');\n\nconst msg3 = '\\ud83c\\udf73 *Batch cooking option* (lazy Sunday prep)\\n' +\n  output.batch_cooking.intro + '\\n\\n' + dishLines +\n  '\\n\\n\\ud83d\\uded2 *Batch cooking groceries*\\n' + batchGrocery +\n  '\\n\\nTraining plan saved to Airtable.';\n\nreturn [\n  { json: { telegram_text: msg1 } },\n  { json: { telegram_text: msg2 } },\n  { json: { telegram_text: msg3 } }\n];"
+      },
+      "id": "a8c1e341-2918-48de-9879-153169359f5a",
+      "name": "Format Weekly Recap",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "6686274023",
+        "text": "={{ $json.telegram_text }}",
+        "additionalFields": {}
+      },
+      "id": "a3723587-7d33-4812-abaa-82813f85c5ce",
+      "name": "Send to Athlete",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        288,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "webhookId": "84d223ca-1e7f-40a4-b56c-a431a9587c6e",
+      "credentials": {
+        "telegramApi": {
+          "id": "BPENTF4zNdVV7dTH",
+          "name": "Telegram - Hyrox Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblCfdZNzkVH3heRm",
+          "mode": "id",
+          "cachedResultName": "training_plan"
+        },
+        "filterByFormula": "={{ \"AND({status}='planned', NOT(IS_BEFORE({date}, '\" + $('Plan Week AI Agent').first().json.output.sessions[0].date + \"')), NOT(IS_AFTER({date}, '\" + $('Plan Week AI Agent').first().json.output.sessions[6].date + \"')))\" }}",
+        "options": {}
+      },
+      "id": "06a4d5c5-419f-4bd7-afe7-b730e9e2ffb1",
+      "name": "Find Existing Week Rows",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        -48,
+        624
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "deleteRecord",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblCfdZNzkVH3heRm",
+          "mode": "id",
+          "cachedResultName": "training_plan"
+        },
+        "id": "={{ $json.id }}"
+      },
+      "id": "892ab2aa-c381-48fb-9f63-6fd645700081",
+      "name": "Delete Existing Week Rows",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        624
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "return [$('Plan Week AI Agent').first()];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        624
+      ],
+      "id": "d9933fee-8567-47af-9f60-19824981380c",
+      "name": "Sync After Cleanup"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbljpyctsWcGezqdZ",
+          "mode": "id",
+          "cachedResultName": "nutrition_plans"
+        },
+        "filterByFormula": "={{ \"AND(NOT(IS_BEFORE({date}, '\" + $('Compute Phase').first().json.week_start + \"')), NOT(IS_AFTER({date}, '\" + $('Compute Phase').first().json.week_end + \"')))\" }}",
+        "options": {}
+      },
+      "id": "e1a2b3c4-0001-4000-a000-nutrition0001",
+      "name": "Find Existing Nutrition Rows",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        -48,
+        1200
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "deleteRecord",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbljpyctsWcGezqdZ",
+          "mode": "id",
+          "cachedResultName": "nutrition_plans"
+        },
+        "id": "={{ $json.id }}"
+      },
+      "id": "e1a2b3c4-0002-4000-a000-nutrition0002",
+      "name": "Delete Existing Nutrition Rows",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        1200
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "continueOnFail": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [$('Plan Week AI Agent').first()];\n"
+      },
+      "id": "e1a2b3c4-0003-4000-a000-nutrition0003",
+      "name": "Sync After Nutrition Cleanup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "output.nutrition.daily_plans",
+        "options": {}
+      },
+      "id": "e1a2b3c4-0004-4000-a000-nutrition0004",
+      "name": "Split Out Nutrition Plans",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        432,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbljpyctsWcGezqdZ",
+          "mode": "id",
+          "cachedResultName": "nutrition_plans"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date":       "={{ DateTime.fromISO($json.date).toISODate() }}",
+            "calories":   "={{ parseInt($json.calories) }}",
+            "protein_g":  "={{ parseInt($json.protein_g) }}",
+            "carbs_g":    "={{ parseInt($json.carbs_g) }}",
+            "fat_g":      "={{ parseInt($json.fat_g) }}",
+            "meals":      "={{ $json.meals || '' }}",
+            "phase":      "={{ $('Compute Phase').first().json.phase }}",
+            "week_number":"={{ $('Compute Phase').first().json.week_number }}",
+            "daily_groceries":"={{ ($json.daily_groceries || []).join(String.fromCharCode(10)) }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "date",        "displayName": "date",        "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "dateTime", "readOnly": false, "removed": false },
+            { "id": "calories",    "displayName": "calories",    "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "number",   "readOnly": false, "removed": false },
+            { "id": "protein_g",   "displayName": "protein_g",   "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "number",   "readOnly": false, "removed": false },
+            { "id": "carbs_g",     "displayName": "carbs_g",     "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "number",   "readOnly": false, "removed": false },
+            { "id": "fat_g",       "displayName": "fat_g",       "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "number",   "readOnly": false, "removed": false },
+            { "id": "meals",       "displayName": "meals",       "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "string",   "readOnly": false, "removed": false },
+            { "id": "phase",       "displayName": "phase",       "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "string",   "readOnly": false, "removed": false },
+            { "id": "week_number",      "displayName": "week_number",      "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "number", "readOnly": false, "removed": false },
+            { "id": "daily_groceries", "displayName": "daily_groceries", "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "string", "readOnly": false, "removed": false }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "e1a2b3c4-0005-4000-a000-nutrition0005",
+      "name": "Insert Nutrition into Airtable",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        592,
+        1200
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every Friday 13:00": {
+      "main": [
+        [
+          {
+            "node": "Read Athlete Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Athlete Profile": {
+      "main": [
+        [
+          {
+            "node": "Read Last 21 Days Strava",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Last 21 Days Strava": {
+      "main": [
+        [
+          {
+            "node": "Compute Phase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Phase": {
+      "main": [
+        [
+          {
+            "node": "Read Next Week Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Next Week Calendar": {
+      "main": [
+        [
+          {
+            "node": "Build Calendar Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Calendar Context": {
+      "main": [
+        [
+          {
+            "node": "Package Planning Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Package Planning Context": {
+      "main": [
+        [
+          {
+            "node": "Plan Week AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan Week AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Format Weekly Recap",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Find Existing Week Rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Find Existing Nutrition Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Existing Nutrition Rows": {
+      "main": [
+        [
+          {
+            "node": "Delete Existing Nutrition Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Existing Nutrition Rows": {
+      "main": [
+        [
+          {
+            "node": "Sync After Nutrition Cleanup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync After Nutrition Cleanup": {
+      "main": [
+        [
+          {
+            "node": "Split Out Nutrition Plans",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Nutrition Plans": {
+      "main": [
+        [
+          {
+            "node": "Insert Nutrition into Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Sessions": {
+      "main": [
+        [
+          {
+            "node": "Insert Session into Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Weekly Recap": {
+      "main": [
+        [
+          {
+            "node": "Send to Athlete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Plan Week AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Plan Week AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hyrox Knowledge Base": {
+      "ai_tool": [
+        [
+          {
+            "node": "Plan Week AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reranker Cohere": {
+      "ai_reranker": [
+        [
+          {
+            "node": "Hyrox Knowledge Base",
+            "type": "ai_reranker",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Hyrox Knowledge Base",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Existing Week Rows": {
+      "main": [
+        [
+          {
+            "node": "Delete Existing Week Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Existing Week Rows": {
+      "main": [
+        [
+          {
+            "node": "Sync After Cleanup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync After Cleanup": {
+      "main": [
+        [
+          {
+            "node": "Split Out Sessions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "bd1ce4e7-ab59-4049-9035-238c7e292a94",
+  "meta": {
+    "instanceId": "6d560a8671cba66bb83c5709708889570d8da58c18b1dfc9fa41ebdbb998c2bb"
+  },
+  "id": "gtUPasQV4vDu0nGt",
+  "tags": []
+}

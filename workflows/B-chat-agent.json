@@ -1,0 +1,761 @@
+{
+  "name": "Hyrox - B - Conversational Chat",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "176d9873-c038-48ad-8abe-82cf30f7ff0d",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        592
+      ],
+      "webhookId": "hyrox-b-webhook-001",
+      "credentials": {
+        "telegramApi": {
+          "id": "BPENTF4zNdVV7dTH",
+          "name": "Telegram - Hyrox Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbloi8D9r6OWC5jXp",
+          "mode": "id",
+          "cachedResultName": "athlete_profile"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "id": "c08426cf-da09-4ff5-ab09-e2a1172e442a",
+      "name": "Read Athlete Profile",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1968,
+        592
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblCfdZNzkVH3heRm",
+          "mode": "id"
+        },
+        "filterByFormula": "AND(IS_AFTER({date}, DATEADD(TODAY(), -7, 'days')), IS_BEFORE({date}, DATEADD(TODAY(), 8, 'days')))",
+        "options": {},
+        "sort": {
+          "property": [
+            {
+              "field": "date"
+            }
+          ]
+        }
+      },
+      "id": "4480cf26-5cf1-4777-a636-83afb1a7ac04",
+      "name": "Read Current Week Plan",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2160,
+        592
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 10
+      },
+      "id": "8236ff7f-83a3-41ce-b2fd-d839c1c70f37",
+      "name": "Read Recent Strava",
+      "type": "n8n-nodes-base.strava",
+      "typeVersion": 1.1,
+      "position": [
+        2368,
+        592
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "stravaOAuth2Api": {
+          "id": "YY7ao1EAbjKCxzYm",
+          "name": "Strava account - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const trigger   = $('Telegram Trigger').first().json;\nconst athlete   = ($('Read Athlete Profile').first().json.fields ?? $('Read Athlete Profile').first().json);\nconst planItems = $('Read Current Week Plan').all();\nconst strava    = $('Read Recent Strava').all();\n\nconst incomingText = trigger.message?.text || trigger.message?.caption || '(no text)';\nconst chatId       = String(trigger.message?.chat?.id || '6686274023');\n\nconst weekPlan = planItems.map(i => {\n  const f = i.json.fields ?? i.json;\n  return '- ' + (f.date||'?') + ': ' + (f.session_type||'?') + ' (' + (f.duration_min||'?') + 'min, ' + (f.intensity||'?') + ') — ' + (f.description||'').substring(0, 100);\n}).join('\\n') || 'No sessions in range';\n\nconst recentActivity = strava.length === 0\n  ? 'No recent activities'\n  : strava.map(a => '- ' + (a.json.name||'Activity') + ' (' + (a.json.type||'?') + ', ' + Math.round((a.json.distance||0)/100)/10 + 'km, ' + Math.round((a.json.moving_time||0)/60) + 'min, ' + (a.json.start_date_local||'').substring(0,10) + ')').join('\\n');\n\nreturn [{\n  json: {\n    chat_id:         chatId,\n    incoming_text:   incomingText,\n    today_date:      new Date().toISOString().slice(0,10),\n    athlete_name:    athlete.name || 'Athlete',\n    coach_tone:      athlete.coach_tone || 'supportive',\n    coach_severity:  athlete.coach_severity || 'balanced',\n    injuries_active: athlete.injuries_active || 'none',\n    equipment_home:  Array.isArray(athlete.equipment_home) ? athlete.equipment_home.join(', ') : (athlete.equipment_home || ''),\n    hyrox_target_date: athlete.hyrox_target_date || '',\n    week_plan_summary: weekPlan,\n    recent_strava:   recentActivity\n  }\n}];"
+      },
+      "id": "b633309b-7236-4986-9358-6caccdad18b6",
+      "name": "Package Chat Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2560,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Athlete: ' + $json.athlete_name + '\\nDate: ' + $json.today_date + '\\nCoach tone: ' + $json.coach_tone + ' / ' + $json.coach_severity + '\\nActive injuries: ' + $json.injuries_active + '\\nEquipment at home: ' + $json.equipment_home + '\\nTarget race date: ' + $json.hyrox_target_date + '\\n\\nCurrent week plan:\\n' + $json.week_plan_summary + '\\n\\nRecent training:\\n' + $json.recent_strava + '\\n\\nAthlete message: ' + $json.incoming_text }}",
+        "options": {
+          "systemMessage": "You are Hyrox Coach, an AI agent providing personalised training and nutrition coaching to a single athlete preparing for Hyrox races. You combine the role of a strength & conditioning coach, an endurance coach, and a sports nutritionist — but you are not a replacement for medical advice, and you say so when relevant.\n\nYou are operating in CONVERSATIONAL ROLE: have a back-and-forth conversation, modify the day's plan when asked, answer coaching questions, and look up information. Replies must stay under 200 words unless the athlete explicitly asks for a long response. End with a question or call to action when the conversation is not naturally closed.\n\nCONTEXT AVAILABLE IN EVERY INVOCATION:\n- athlete_profile: name, target race date, division, equipment, injuries, tone preference\n- training_plan: current week plan (±3 days)\n- recent_strava: last 10 Strava activities\n- today_date: current date\n\nOPERATING PRINCIPLES:\n1. Be specific, never generic. Use numbers, timings, and concrete foods/exercises.\n2. Cite the knowledge base when discussing periodization, nutrient timing, or Hyrox-specific programming.\n3. Use the athlete's context relentlessly — reference phase, recent sessions, or injuries in every reply.\n4. Honor coach_tone and coach_severity from the athlete profile.\n5. Default to safety: if the athlete reports pain or unusual fatigue, recommend rest and/or medical advice.\n6. Stay in scope: Hyrox prep, training, nutrition, recovery only.\n\nTOOLS — when and how to use them:\n- hyrox_knowledge_base: use for \"why\" questions, citation needs, periodization or nutrition specifics\n- update_training_session: call this tool immediately when the athlete asks to change, replace, or plan a session for a specific day — no confirmation needed, just save it. MANDATORY: call the tool FIRST, then write your reply using the confirmation string the tool returns. NEVER write \"updated\", \"saved\", or \"done\" before the tool has been called.\n- replan_week: USE THIS TOOL whenever the athlete wants to change multiple sessions or the whole week (travel, injury, schedule changes, explicit replan request). MANDATORY SEQUENCE: (1) call replan_week FIRST, (2) wait for the tool result, (3) use the recap from the tool result in your reply. NEVER describe a replanned week in text without calling this tool first. NEVER say \"Confirmed\" or \"I've updated\" without having actually called the tool.\n\nIMPORTANT: A Hyrox training week = 7 days, Monday through Sunday, weekends fully included."
+        }
+      },
+      "id": "d7043fd6-72c9-4b26-8b1d-45be48a0059f",
+      "name": "Hyrox Coach Chat Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        2768,
+        592
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-5.4-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "575ffd27-5393-45f4-b1e6-997ae6176802",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        2560,
+        800
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "openAiApi": {
+          "id": "YGWEA0vPHv8srLC6",
+          "name": "OpenAI - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Package Chat Context').first().json.chat_id }}",
+        "contextWindowLength": 10
+      },
+      "id": "59bd1cbf-3827-4de9-bd34-b9de66e8486e",
+      "name": "Chat Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        2768,
+        800
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Hyrox training knowledge, athlete notes, race strategy, nutrition guidance, recovery recommendations, and background reference material. Use for \"why\" questions and when recommendations need sourcing.",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "hyrox-knowledge-base",
+          "mode": "list",
+          "cachedResultName": "hyrox-knowledge-base"
+        },
+        "useReranker": true,
+        "options": {}
+      },
+      "id": "eb7d7fde-faea-4985-9cd1-ec8d05f0c975",
+      "name": "Hyrox Knowledge Base",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        2960,
+        800
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "pineconeApi": {
+          "id": "0L1d2Cx1zDbgkcIR",
+          "name": "Pinecone account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "57b93e84-9707-4ac5-a524-3d1ed33f6954",
+      "name": "Reranker Cohere",
+      "type": "@n8n/n8n-nodes-langchain.rerankerCohere",
+      "typeVersion": 1,
+      "position": [
+        3168,
+        992
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "cohereApi": {
+          "id": "K7YKHElqXH4IjMJC",
+          "name": "Cohere account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "dd15ee8a-332e-46b4-8d98-7618161249d8",
+      "name": "Embeddings OpenAI",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        2960,
+        992
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "openAiApi": {
+          "id": "YGWEA0vPHv8srLC6",
+          "name": "OpenAI - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Saves a changed training session to Airtable. Call this tool FIRST — before writing any reply that describes a session change. Do NOT say 'updated', 'saved', or 'done' before this tool returns. Use the tool's confirmation string in your reply. Required: date (YYYY-MM-DD). Optional: session_type, description, duration_min, intensity (easy/moderate/hard/max), notes.",
+        "workflowId": {
+          "__rl": true,
+          "value": "nHiy7mloI9vXwv4S",
+          "mode": "id",
+          "cachedResultUrl": "/workflow/nHiy7mloI9vXwv4S"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ $fromAI(\"date\", \"ISO date of the session to update\", \"string\") }}",
+            "session_type": "={{ $fromAI(\"session_type\", \"New session type, e.g. Rest, Mobility, Z2 endurance\", \"string\") }}",
+            "description": "={{ $fromAI(\"description\", \"New session description\", \"string\") }}",
+            "duration_min": "={{ $fromAI(\"duration_min\", \"New duration in minutes\", \"number\") }}",
+            "intensity": "={{ $fromAI(\"intensity\", \"New intensity: easy, moderate, hard, or max\", \"string\") }}",
+            "notes": "={{ $fromAI(\"notes\", \"Coaching notes for this session\", \"string\") }}"
+          },
+          "schema": []
+        }
+      },
+      "id": "144a1111-1e3b-4a79-ae8b-cf436f546d6d",
+      "name": "Update Training Session",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        2720,
+        992
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "description": "Generates a new 7-day training plan (Mon-Sun) and saves it directly to Airtable. Call this tool FIRST — before writing any plan in your response. Do NOT describe sessions in text before calling this tool. The tool returns the updated plan as a recap string; use that recap in your reply. Use whenever the athlete wants to change multiple sessions or the whole week.",
+        "workflowId": {
+          "__rl": true,
+          "value": "YbtdsdZPKRmcUWYL",
+          "mode": "id",
+          "cachedResultUrl": "/workflow/YbtdsdZPKRmcUWYL"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reason": "={{ $fromAI(\"reason\", \"Short reason for replanning (e.g. injury, travel, missed sessions)\", \"string\") }}"
+          },
+          "schema": []
+        }
+      },
+      "id": "15d4c3cb-00f8-492e-bd05-7042d40f4dd3",
+      "name": "Replan Week",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        2544,
+        992
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Package Chat Context').first().json.chat_id }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {}
+      },
+      "id": "99ef26fe-b050-49d0-a8aa-dfa0075df4f2",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3024,
+        592
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "webhookId": "hyrox-b-send-001",
+      "credentials": {
+        "telegramApi": {
+          "id": "BPENTF4zNdVV7dTH",
+          "name": "Telegram - Hyrox Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbls3jjCO1m5fio0c",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now.toISO() }}",
+            "role": "user",
+            "content": "={{ $('Package Chat Context').first().json.incoming_text }}",
+            "session_id": "={{ $('Package Chat Context').first().json.chat_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "role",
+              "displayName": "role",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "readOnly": false,
+              "removed": false,
+              "options": [
+                {
+                  "name": "user",
+                  "value": "user"
+                },
+                {
+                  "name": "assistant",
+                  "value": "assistant"
+                }
+              ]
+            },
+            {
+              "id": "content",
+              "displayName": "content",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "session_id",
+              "displayName": "session_id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "27ac8451-d421-4757-94e0-d254c86142c9",
+      "name": "Log User Message",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        3168,
+        592
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbls3jjCO1m5fio0c",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now.toISO() }}",
+            "role": "assistant",
+            "content": "={{ $('Hyrox Coach Chat Agent').first().json.output }}",
+            "session_id": "={{ $('Package Chat Context').first().json.chat_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "role",
+              "displayName": "role",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "readOnly": false,
+              "removed": false,
+              "options": [
+                {
+                  "name": "user",
+                  "value": "user"
+                },
+                {
+                  "name": "assistant",
+                  "value": "assistant"
+                }
+              ]
+            },
+            {
+              "id": "content",
+              "displayName": "content",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "session_id",
+              "displayName": "session_id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "71b269fd-d047-47f8-bdbd-7f4cb704ba83",
+      "name": "Log Agent Response",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        3360,
+        592
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Athlete Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Athlete Profile": {
+      "main": [
+        [
+          {
+            "node": "Read Current Week Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Current Week Plan": {
+      "main": [
+        [
+          {
+            "node": "Read Recent Strava",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Recent Strava": {
+      "main": [
+        [
+          {
+            "node": "Package Chat Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Package Chat Context": {
+      "main": [
+        [
+          {
+            "node": "Hyrox Coach Chat Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hyrox Coach Chat Agent": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Response": {
+      "main": [
+        [
+          {
+            "node": "Log User Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log User Message": {
+      "main": [
+        [
+          {
+            "node": "Log Agent Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Hyrox Coach Chat Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Hyrox Coach Chat Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hyrox Knowledge Base": {
+      "ai_tool": [
+        [
+          {
+            "node": "Hyrox Coach Chat Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reranker Cohere": {
+      "ai_reranker": [
+        [
+          {
+            "node": "Hyrox Knowledge Base",
+            "type": "ai_reranker",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Hyrox Knowledge Base",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replan Week": {
+      "ai_tool": [
+        [
+          {
+            "node": "Hyrox Coach Chat Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Training Session": {
+      "ai_tool": [
+        [
+          {
+            "node": "Hyrox Coach Chat Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "32165a2e-ff05-4007-9a3b-c26fd765bd38",
+  "meta": {
+    "instanceId": "6d560a8671cba66bb83c5709708889570d8da58c18b1dfc9fa41ebdbb998c2bb"
+  },
+  "id": "U4LVziHLADlfICP0",
+  "tags": []
+}

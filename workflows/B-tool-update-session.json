@@ -1,0 +1,262 @@
+{
+  "name": "Hyrox - B-tool - Update Session",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "d2c72467-f6f5-4b84-b4ac-36f7b2c6499d",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblCfdZNzkVH3heRm",
+          "mode": "id",
+          "cachedResultName": "training_plan"
+        },
+        "filterByFormula": "={{ \"IS_SAME({date}, '\" + $json.date + \"', 'day')\" }}",
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "id": "b9bc554b-a13e-4bad-b598-531926178396",
+      "name": "Find Session by Date",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        208,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input   = $('Execute Workflow Trigger').first().json;\nconst found   = $input.first().json; // result from Find Session by Date\nconst recordId = found.id;\n\nif (!recordId) {\n  // No session found for that date — return an error message\n  return [{ json: { record_id: null, fields: {}, error: 'No session found for date: ' + (input.date || '?') } }];\n}\n\nconst fields = {};\nif (input.session_type && String(input.session_type).trim() !== '') {\n  fields.session_type = String(input.session_type).trim();\n}\nif (input.description && String(input.description).trim() !== '') {\n  fields.description = String(input.description).trim();\n}\nif (input.duration_min !== null && input.duration_min !== undefined && input.duration_min !== '') {\n  const d = parseInt(input.duration_min);\n  if (!isNaN(d)) fields.duration_min = d;\n}\nif (input.intensity && String(input.intensity).trim() !== '') {\n  fields.intensity = String(input.intensity).trim();\n}\nif (input.notes && String(input.notes).trim() !== '') {\n  fields.notes = String(input.notes).trim();\n}\nfields.status = 'modified'; // always mark as modified when agent edits it\n\nreturn [{ json: { record_id: recordId, date: input.date, fields } }];"
+      },
+      "id": "863b5adf-137b-43ab-ac28-9db45d1cab40",
+      "name": "Prepare Update Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblCfdZNzkVH3heRm",
+          "mode": "id",
+          "cachedResultName": "training_plan"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "session_type": "={{ $json.fields.session_type || \"\" }}",
+            "description": "={{ $json.fields.description  || \"\" }}",
+            "duration_min": "={{ $json.fields.duration_min !== undefined ? $json.fields.duration_min : \"\" }}",
+            "intensity": "={{ $json.fields.intensity    || \"\" }}",
+            "notes": "={{ $json.fields.notes        || \"\" }}",
+            "status": "={{ $json.fields.status       || \"modified\" }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "session_type",
+              "displayName": "session_type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "duration_min",
+              "displayName": "duration_min",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "intensity",
+              "displayName": "intensity",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "00e9fcdb-3219-422e-93ab-88ce042c8cb0",
+      "name": "Update Session Record",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        608,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const prep   = $('Prepare Update Fields').first().json;\nconst update = $input.first().json;\n\nif (prep.error) {\n  return [{ json: { confirmation: 'Could not update: ' + prep.error } }];\n}\n\nconst changed = Object.keys(prep.fields)\n  .filter(k => k !== 'status')\n  .map(k => k + ' → ' + prep.fields[k])\n  .join(', ');\n\nconst msg = changed\n  ? 'Session on ' + prep.date + ' updated: ' + changed + '. Status set to modified.'\n  : 'No changes applied to session on ' + prep.date + ' (all fields were empty).';\n\nreturn [{ json: { confirmation: msg } }];"
+      },
+      "id": "68db0e7c-3faf-4bd5-9969-9b2f7590beed",
+      "name": "Build Confirmation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Find Session by Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Session by Date": {
+      "main": [
+        [
+          {
+            "node": "Prepare Update Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Update Fields": {
+      "main": [
+        [
+          {
+            "node": "Update Session Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Session Record": {
+      "main": [
+        [
+          {
+            "node": "Build Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "877c0e01-930a-40e9-adb2-aea24444401a",
+  "meta": {
+    "instanceId": "6d560a8671cba66bb83c5709708889570d8da58c18b1dfc9fa41ebdbb998c2bb"
+  },
+  "id": "nHiy7mloI9vXwv4S",
+  "tags": []
+}
