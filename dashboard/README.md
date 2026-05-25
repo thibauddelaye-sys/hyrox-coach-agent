@@ -7,5 +7,5 @@ To be built on Day 5 (task S5-D1). See `docs/claude-code-prompts.md` for the pro
 ## Run (once built)
 
 ```bash
-streamlit run dashboard/app.py
+streamlit run dashboard/Dashboard.py
 ```

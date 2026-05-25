@@ -14,6 +14,8 @@ import altair as alt
 import pandas as pd
 from datetime import date, timedelta
 
+from dashboard.lib.styles import inject_bg
+inject_bg("bg_metrics.jpg")
 from dashboard.lib import airtable_client as db
 
 st.set_page_config(page_title="Metrics · Hyrox Coach", page_icon="📊", layout="wide")
@@ -40,6 +42,15 @@ if logs:
     df_logs["duration_min"] = pd.to_numeric(df_logs.get("duration_min", 0), errors="coerce").fillna(0)
     df_logs["distance_km"]  = pd.to_numeric(df_logs.get("distance_km",  0), errors="coerce").fillna(0)
 
+    total_hours = df_logs["duration_min"].sum() / 60
+    num_activities = len(df_logs)
+    total_km = df_logs["distance_km"].sum()
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Total training time", f"{total_hours:.1f} h")
+    m2.metric("Activities", num_activities)
+    m3.metric("Total distance", f"{total_km:.1f} km")
+
     col1, col2 = st.columns(2)
     with col1:
         chart = (
@@ -60,17 +71,17 @@ if logs:
 
     with col2:
         df_week = df_logs.copy()
-        df_week["week"] = pd.to_datetime(df_week["date"]).dt.to_period("W").dt.start_time
-        weekly = df_week.groupby("week")["duration_min"].sum().reset_index()
+        df_week["week"] = pd.to_datetime(df_week["date"]).dt.to_period("W").dt.start_time.dt.strftime("%d %b")
+        weekly = df_week.groupby("week", sort=False)["duration_min"].sum().reset_index()
         weekly.columns = ["week", "total_min"]
 
         chart2 = (
             alt.Chart(weekly)
             .mark_bar(color="#2ecc71", cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
             .encode(
-                x=alt.X("week:T", title="Week", axis=alt.Axis(format="%d %b")),
+                x=alt.X("week:O", title="Week", sort=None),
                 y=alt.Y("total_min:Q", title="Total (min)"),
-                tooltip=["week:T", "total_min:Q"],
+                tooltip=["week:O", "total_min:Q"],
             )
             .properties(title="Weekly volume", height=280)
         )

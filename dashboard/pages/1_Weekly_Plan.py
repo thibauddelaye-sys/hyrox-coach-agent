@@ -13,6 +13,8 @@ import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
 
+from dashboard.lib.styles import inject_bg
+inject_bg("bg_weekly.jpg")
 from dashboard.lib import airtable_client as db
 
 st.set_page_config(page_title="Weekly Plan · Hyrox Coach", page_icon="📆", layout="wide")
@@ -24,9 +26,9 @@ this_monday = today - timedelta(days=today.weekday())
 
 week_offset = st.select_slider(
     "Week",
-    options=[-2, -1, 0, 1, 2],
+    options=[-1, 0, 1],
     value=0,
-    format_func=lambda x: {-2:"2 weeks ago",-1:"Last week",0:"This week",1:"Next week",2:"In 2 weeks"}[x],
+    format_func=lambda x: {-1: "Last week", 0: "This week", 1: "Next week"}[x],
 )
 week_start = this_monday + timedelta(weeks=week_offset)
 week_end   = week_start + timedelta(days=6)

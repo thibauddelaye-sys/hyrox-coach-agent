@@ -11,7 +11,7 @@ from pinecone import Pinecone
 
 from dashboard.lib import airtable_client as db
 
-_OPENAI_MODEL = os.getenv("OPENAI_MODEL_CHAT", "gpt-4o-mini")
+_OPENAI_MODEL = os.getenv("OPENAI_MODEL_CHAT", "gpt-4.1")
 _EMBED_MODEL  = os.getenv("OPENAI_MODEL_EMBEDDING", "text-embedding-3-small")
 _PINECONE_INDEX = os.environ["PINECONE_INDEX_NAME"]
 

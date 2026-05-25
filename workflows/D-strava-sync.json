@@ -1,0 +1,227 @@
+{
+  "name": "Hyrox - D - Strava Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "d1000000-0000-0000-0000-000000000001",
+      "name": "Every 2 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [64, 0]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 50,
+        "additionalFields": {
+          "after": "={{ $now.minus({days: 7}).toUnixInteger() }}"
+        }
+      },
+      "id": "d1000000-0000-0000-0000-000000000002",
+      "name": "Fetch Strava Activities",
+      "type": "n8n-nodes-base.strava",
+      "typeVersion": 1.1,
+      "position": [284, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "credentials": {
+        "stravaOAuth2Api": {
+          "id": "YY7ao1EAbjKCxzYm",
+          "name": "Strava account - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "d1000000-0000-0000-0000-000000000003",
+      "name": "Loop Over Activities",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [504, 0]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblHOfZ0PU1zGkeLU",
+          "mode": "id"
+        },
+        "filterByFormula": "={{ \"{strava_activity_id} = '\" + String($json.id) + \"'\" }}",
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "id": "d1000000-0000-0000-0000-000000000004",
+      "name": "Check if Exists",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [724, 100],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "d-if-001",
+              "leftValue": "={{ Object.keys($json).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d1000000-0000-0000-0000-000000000005",
+      "name": "Is New Activity?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [944, 100]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblHOfZ0PU1zGkeLU",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date":                "={{ new Date($('Loop Over Activities').first().json.start_date_local).toISOString().slice(0, 10) }}",
+            "activity_type":      "={{ $('Loop Over Activities').first().json.type }}",
+            "duration_min":       "={{ Math.round($('Loop Over Activities').first().json.moving_time / 60) }}",
+            "distance_km":        "={{ Math.round($('Loop Over Activities').first().json.distance / 100) / 10 }}",
+            "avg_heart_rate":     "={{ $('Loop Over Activities').first().json.average_heartrate || null }}",
+            "strava_activity_id": "={{ String($('Loop Over Activities').first().json.id) }}",
+            "notes":              "={{ $('Loop Over Activities').first().json.name }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "date",                "displayName": "date",                "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "string",  "readOnly": false, "removed": false },
+            { "id": "activity_type",       "displayName": "activity_type",       "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "string",  "readOnly": false, "removed": false },
+            { "id": "duration_min",        "displayName": "duration_min",        "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "number",  "readOnly": false, "removed": false },
+            { "id": "distance_km",         "displayName": "distance_km",         "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "number",  "readOnly": false, "removed": false },
+            { "id": "avg_heart_rate",      "displayName": "avg_heart_rate",      "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "number",  "readOnly": false, "removed": false },
+            { "id": "strava_activity_id",  "displayName": "strava_activity_id",  "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "string",  "readOnly": false, "removed": false },
+            { "id": "notes",               "displayName": "notes",               "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "string",  "readOnly": false, "removed": false }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d1000000-0000-0000-0000-000000000006",
+      "name": "Insert Activity",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [1164, 200],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcF9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\n  timestamp: new Date().toISOString(),\n  message: 'Strava sync complete.'\n} }];"
+      },
+      "id": "d1000000-0000-0000-0000-000000000007",
+      "name": "Log Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [724, -200]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 2 Hours": {
+      "main": [
+        [{ "node": "Fetch Strava Activities", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Strava Activities": {
+      "main": [
+        [{ "node": "Loop Over Activities", "type": "main", "index": 0 }]
+      ]
+    },
+    "Loop Over Activities": {
+      "main": [
+        [{ "node": "Check if Exists", "type": "main", "index": 0 }],
+        [{ "node": "Log Summary", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check if Exists": {
+      "main": [
+        [{ "node": "Is New Activity?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is New Activity?": {
+      "main": [
+        [{ "node": "Insert Activity", "type": "main", "index": 0 }],
+        [{ "node": "Loop Over Activities", "type": "main", "index": 0 }]
+      ]
+    },
+    "Insert Activity": {
+      "main": [
+        [{ "node": "Loop Over Activities", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "6d560a8671cba66bb83c5709708889570d8da58c18b1dfc9fa41ebdbb998c2bb"
+  },
+  "id": "hyrox-workflow-d-001",
+  "tags": []
+}

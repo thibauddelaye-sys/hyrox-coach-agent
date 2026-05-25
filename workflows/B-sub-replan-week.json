@@ -202,7 +202,7 @@
         "model": {
           "__rl": true,
           "mode": "id",
-          "value": "gpt-4o-mini"
+          "value": "gpt-4o"
         },
         "builtInTools": {},
         "options": {}
@@ -330,7 +330,7 @@
           "mode": "id",
           "cachedResultName": "training_plan"
         },
-        "filterByFormula": "={{ \"AND({status}='planned', NOT(IS_BEFORE({date}, '\" + $('Compute Replan Window').first().json.remaining_dates[0] + \"')), NOT(IS_AFTER({date}, '\" + $('Compute Replan Window').first().json.week_end + \"')))\" }}",
+        "filterByFormula": "={{ \"AND({status}='planned', NOT(IS_BEFORE({date}, '\" + $('Compute Replan Window').first().json.week_start + \"')), NOT(IS_AFTER({date}, '\" + $('Compute Replan Window').first().json.week_end + \"')))\" }}",
         "options": {}
       },
       "id": "7e8073a3-2879-44a9-8c81-235f66d10e67",
@@ -388,6 +388,19 @@
         }
       },
       "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "return [$('Replan AI Agent').first()];"
+      },
+      "id": "c9d8e7f6-a5b4-4c3d-8e2f-1a0b9c8d7e6f",
+      "name": "Sync After Delete",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1968,
+        0
+      ]
     },
     {
       "parameters": {
@@ -723,11 +736,6 @@
             "index": 0
           },
           {
-            "node": "Find Planned Remaining Rows",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "Find Existing Nutrition Rows",
             "type": "main",
             "index": 0
@@ -750,7 +758,7 @@
       "main": [
         [
           {
-            "node": "Split Out Sessions",
+            "node": "Find Planned Remaining Rows",
             "type": "main",
             "index": 0
           }
@@ -762,6 +770,28 @@
         [
           {
             "node": "Delete Planned Remaining Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Planned Remaining Rows": {
+      "main": [
+        [
+          {
+            "node": "Sync After Delete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync After Delete": {
+      "main": [
+        [
+          {
+            "node": "Split Out Sessions",
             "type": "main",
             "index": 0
           }

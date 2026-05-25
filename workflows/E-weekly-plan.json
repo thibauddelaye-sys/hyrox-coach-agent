@@ -7,7 +7,7 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "47 9 * * 4"
+              "expression": "0 13 * * 5"
             }
           ]
         }
@@ -82,7 +82,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const athleteData = $('Read Athlete Profile').first().json;\nconst athlete = athleteData.fields ?? athleteData;\n\nconst rawDate = athlete.hyrox_target_date || '2026-07-18';\nconst targetDate = new Date(rawDate);\nconst now = new Date();\nconst daysToRace = Math.floor((targetDate - now) / (1000 * 60 * 60 * 24));\nconst weeksToRace = Math.ceil(daysToRace / 7);\n\nlet phase;\nif (weeksToRace <= 2) phase = 'Taper';\nelse if (weeksToRace <= 5) phase = 'Peak';\nelse if (weeksToRace <= 12) phase = 'Build';\nelse phase = 'Base';\n\nconst totalPrepWeeks = 20;\nconst weekNumber = Math.max(1, totalPrepWeeks - weeksToRace + 1);\n\nconst today = new Date();\nconst dayOfWeek = today.getDay();\nconst daysUntilMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);\nconst nextMonday = new Date(today);\nnextMonday.setDate(today.getDate() + daysUntilMonday);\nconst nextSunday = new Date(nextMonday);\nnextSunday.setDate(nextMonday.getDate() + 6);\n\nconst isoDate = d => d.toISOString().slice(0, 10);\n\nreturn [{\n  json: {\n    phase,\n    weeks_to_race: weeksToRace,\n    week_number: weekNumber,\n    week_start: isoDate(nextMonday),\n    week_end: isoDate(nextSunday),\n    week_dates: Array.from({length: 7}, (_, i) => {\n      const d = new Date(nextMonday);\n      d.setDate(nextMonday.getDate() + i);\n      return isoDate(d);\n    })\n  }\n}];"
+        "jsCode": "const athleteData = $('Read Athlete Profile').first().json;\nconst athlete = athleteData.fields ?? athleteData;\n\nconst rawDate = athlete.hyrox_target_date || '2026-07-18';\nconst targetDate = new Date(rawDate);\nconst now = new Date();\nconst daysToRace = Math.floor((targetDate - now) / (1000 * 60 * 60 * 24));\nconst weeksToRace = Math.ceil(daysToRace / 7);\n\nlet phase;\nif (weeksToRace <= 2) phase = 'Taper';\nelse if (weeksToRace <= 5) phase = 'Peak';\nelse if (weeksToRace <= 12) phase = 'Build';\nelse phase = 'Base';\n\nconst totalPrepWeeks = 9;\nconst weekNumber = Math.max(1, totalPrepWeeks - weeksToRace + 1);\n\nconst today = new Date();\nconst dayOfWeek = today.getDay();\nconst daysUntilMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);\nconst nextMonday = new Date(today);\nnextMonday.setDate(today.getDate() + daysUntilMonday);\nconst nextSunday = new Date(nextMonday);\nnextSunday.setDate(nextMonday.getDate() + 6);\n\nconst isoDate = d => d.toISOString().slice(0, 10);\n\nreturn [{\n  json: {\n    phase,\n    weeks_to_race: weeksToRace,\n    week_number: weekNumber,\n    week_start: isoDate(nextMonday),\n    week_end: isoDate(nextSunday),\n    week_dates: Array.from({length: 7}, (_, i) => {\n      const d = new Date(nextMonday);\n      d.setDate(nextMonday.getDate() + i);\n      return isoDate(d);\n    })\n  }\n}];"
       },
       "id": "9b1f5ed1-6086-450b-a867-cb34a3d02ef9",
       "name": "Compute Phase",
@@ -247,7 +247,7 @@
         "model": {
           "__rl": true,
           "mode": "id",
-          "value": "gpt-4o-mini"
+          "value": "gpt-4o"
         },
         "builtInTools": {},
         "options": {}

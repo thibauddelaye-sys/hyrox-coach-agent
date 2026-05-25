@@ -1,187 +1,199 @@
 # Sprint Plan — Hyrox Coach Agent
 
-5 days, solo, ~6h focused work per day = ~30h budget. Tasks below total ~28h, leaving 2h buffer for unblockers.
+5 days, solo, ~6h focused work per day = ~30h budget.
 
 ## Conventions
 
 - **ID**: `S<day>-<area><number>` (e.g. `S2-R1` = Day 2, RAG, task 1)
-- **Estimate**: in hours (1h = "one hour of focused work")
+- **Estimate**: in hours (1h = one hour of focused work)
 - **Deps**: prerequisite task IDs
-- **DoD** (Definition of Done): explicit criteria; the task isn't done until all are checked
-- **Status**: 🔲 not started / 🟡 in progress / ✅ done / 🚫 blocked
+- **DoD**: explicit criteria; the task isn't done until all are checked
+- **Status**: 🔲 not started / 🟡 in progress / ✅ done / 🚫 scoped out
 
 ---
 
 ## Day 1 — Foundation (Mon)
 **Goal:** all credentials configured, Airtable schema live, repo scaffold pushed, first n8n workflow stub running.
 
-### S1-F1 — Repo + scaffolding (1h)
-- [ ] Create GitHub repo `hyrox-coach-agent`, push the scaffold from this template
-- [ ] Set up `.env.example` with all keys needed
-- [ ] Create `requirements.txt` (anthropic, pinecone-client, cohere, streamlit, python-dotenv, pyairtable)
-- **DoD:** repo is public, README renders correctly on GitHub, `.env` is gitignored
+### S1-F1 — Repo + scaffolding (1h) ✅
+- [x] Create GitHub repo, push the scaffold
+- [x] Set up `.env.example` with all keys needed
+- [x] Create `requirements.txt`
+- **DoD:** repo exists, README renders, `.env` is gitignored
 
-### S1-A1 — Airtable base creation (1h) — deps: none
-- [ ] Create base "Hyrox Coach" from `docs/airtable-schema.md`
-- [ ] Seed `athlete_profile` with 1 row (yourself, target_date = mid-August 2026)
-- [ ] Create Airtable Personal Access Token scoped to this base only (`data.records:read`, `data.records:write`, `schema.bases:read`)
-- **DoD:** all 7 tables exist, profile row visible, PAT saved in password manager
+### S1-A1 — Airtable base creation (1h) ✅
+- [x] Create base "Hyrox Coach" from `docs/airtable-schema.md`
+- [x] Seed `athlete_profile` with 1 row (target_date = mid-August 2026)
+- [x] Create Airtable Personal Access Token
+- **DoD:** all tables exist, profile row visible, PAT saved
 
-### S1-C1 — Credentials in n8n (1.5h) — deps: S1-A1
-- [ ] Configure OpenAI API credential in n8n (using the bootcamp key OR your personal key — see `.env.example` for the rationale)
-- [ ] Configure Airtable PAT credential
-- [ ] Configure Telegram bot credential (reuse the Lead Capture bot or create a new one)
-- [ ] Configure Google Calendar OAuth (this is the one that takes time — Google Cloud project + OAuth consent)
-- [ ] Configure Strava API credential (create app at developers.strava.com, generate a personal refresh token via the OAuth dance, save refresh token in n8n)
-- [ ] Configure Pinecone + Cohere credentials
-- **DoD:** "Test connection" returns ✓ for all seven credentials
+### S1-C1 — Credentials in n8n (1.5h) ✅
+- [x] OpenAI API credential
+- [x] Airtable PAT credential
+- [x] Telegram bot credential
+- [x] Google Calendar OAuth
+- [x] Strava API credential
+- [x] Pinecone + Cohere credentials
+- **DoD:** "Test connection" returns ✓ for all credentials
 
-### S1-W1 — Workflow A stub — Daily Briefing skeleton (1h) — deps: S1-C1
-- [ ] Schedule Trigger (test value: every 5 minutes for now; will change to 7 AM before activation)
-- [ ] Airtable node: read athlete_profile
-- [ ] Airtable node: read training_plan for today
-- [ ] Set node: package context
-- [ ] Telegram Send: post a hardcoded "Daily brief test" message
-- **DoD:** triggering manually posts a Telegram message that contains the athlete name from Airtable
+### S1-W1 — Workflow A stub (1h) ✅
+- [x] Schedule Trigger
+- [x] Airtable node: read athlete_profile
+- [x] Airtable node: read training_plan
+- [x] Set node: package context
+- [x] Telegram Send: test message
+- **DoD:** triggering manually posts a Telegram message with the athlete name
 
-### S1-P1 — Stories file + Day 2 plan (0.5h)
-- [ ] Commit `docs/stories.md` (this file) to repo
-- [ ] Verify Day 2 dependencies are unblocked
-- **DoD:** stories.md visible on GitHub, no S2 task is blocked by an undone S1 task
+### S1-P1 — Stories file + Day 2 plan (0.5h) ✅
+- [x] Commit `docs/stories.md`
+- **DoD:** stories.md visible on GitHub
 
 **Day 1 total: 5h**
 
 ---
 
 ## Day 2 — Knowledge base + Workflow A complete (Tue)
-**Goal:** RAG pipeline works; Workflow A generates a real (LLM-produced, RAG-grounded) brief end-to-end.
+**Goal:** RAG pipeline works; Workflow A generates a real, RAG-grounded brief end-to-end.
 
-### S2-R1 — Knowledge base curation (1h)
-- [ ] Download/extract the 5 sources into `knowledge-base/`:
-  - Hyrox Training Guide (hyrox.com)
-  - Joe Friel — periodization principles (extracts)
-  - ISSN Position Stand: Nutrient Timing (paper)
-  - Asker Jeukendrup — Sport Nutrition (web articles)
-  - 1-2 community articles on first-time Hyrox prep
-- [ ] Convert PDFs to markdown where possible (better chunking)
-- **DoD:** `knowledge-base/` contains 5 documents totaling ≥30 pages, no copyright violations (extracts only, with sources cited)
+### S2-R1 — Knowledge base curation (1h) ✅
+- [x] Curate 9 sources into `knowledge-base/sources/`:
+  1. Hyrox Official Training Manual
+  2. Hyrox / GORUCK 8-Week Preparation Plan
+  3. ISSN Position Stand: Nutrient Timing (2017)
+  4. Precision Hydration — Hyrox Fueling Guide
+  5. Stronghold Wellness — Hyrox Nutrition Guide
+  6. Sleep Hygiene for Athletes — Recovery Guide
+  7. Recovery in Resistance Training — Microcycle Design
+  8. Periodized Carbohydrate Restriction for Endurance Athletes
+  9. Resistance Training for Body Recomposition
+- **DoD:** 9 documents in `knowledge-base/sources/`, SOURCES.md lists all with citations
 
-### S2-R2 — RAG ingestion script (2h) — deps: S2-R1, S1-C1
-- [ ] Write `rag-ingestion/ingest.py`: chunk (500 tokens, 50 overlap), embed (OpenAI text-embedding-3-small), upsert to Pinecone
-- [ ] Test retrieval with 3 queries: "best meal pre-workout", "how to pace the SkiErg in Hyrox", "taper protocol for a first Hyrox"
-- [ ] Add Cohere rerank to the retrieval flow
-- **DoD:** for each test query, top-3 reranked results are clearly relevant (you can read and confirm)
+### S2-R2 — RAG ingestion script (2h) ✅ — deps: S2-R1, S1-C1
+- [x] Write `rag-ingestion/ingest.py`: chunk (500 tokens, 50 overlap), embed (text-embedding-3-small), upsert to Pinecone
+- [x] Write `rag-ingestion/test_retrieve.py`: smoke tests with 3 queries + Cohere rerank
+- **DoD:** top-3 reranked results are clearly relevant for test queries
 
-### S2-W1 — Workflow A complete — Daily Briefing with RAG (2h) — deps: S2-R2, S1-W1
-- [ ] Replace hardcoded message with an AI Agent node calling Claude
-- [ ] Add a custom HTTP Request tool to the agent: "search_knowledge_base" → calls Pinecone + Cohere
-- [ ] Compose the prompt: system role + context from Airtable + today's calendar
-- [ ] Format the brief in markdown for Telegram (workout / nutrition / recovery / sources)
-- [ ] Write the result to `daily_logs` (status: "briefed")
-- **DoD:** triggering manually produces a structured brief in Telegram that cites at least one source from the knowledge base
+### S2-W1 — Workflow A complete (2h) ✅ — deps: S2-R2, S1-W1
+- [x] n8n AI Agent node with GPT-4.1
+- [x] RAG tool: embed query → Pinecone top-10 → Cohere rerank top-3
+- [x] Read Google Calendar events for today
+- [x] Read last 10 Strava activities
+- [x] 4-section brief: Workout / Nutrition / Recovery / Sources
+- [x] Write result to `daily_logs`
+- [x] Schedule: 6:00 AM daily (`0 6 * * *`)
+- **DoD:** brief fires on schedule, cites at least one knowledge base source
 
-### S2-V1 — Validation pass on Day 2 (0.5h)
-- [ ] Run the brief 3 times back-to-back; check responses vary meaningfully (no copy-paste from sources)
-- [ ] Check idempotency: same date should not produce duplicate `daily_logs` rows
-- **DoD:** 3 distinct briefs generated, 1 idempotency check passed
-
-**Day 2 total: 5.5h**
-
----
-
-## Day 3 — Conversational chat + screenshot ingestion (Wed)
-**Goal:** Workflows B and C are live; you can chat with the agent and send a screenshot, both work end-to-end.
-
-### S3-W2 — Workflow B — Conversational Chat (2.5h) — deps: S2-W1
-- [ ] Telegram Trigger on message (text only for this workflow)
-- [ ] Simple Memory node configured with sessionId from `chat_memory` table (session key = Telegram chat ID)
-- [ ] AI Agent node (Claude) with the same RAG tool as Workflow A
-- [ ] Three additional tools: `read_training_plan`, `read_today_logs`, `update_training_session` (all call Airtable)
-- [ ] On every turn, append both user and assistant messages to `chat_memory`
-- **DoD:** you can have a 5-turn conversation that references something from turn 1; the agent can modify today's session via chat
-
-### S3-W3 — Workflow C — Screenshot Ingestion (1.5h) — deps: S1-C1
-- [ ] Telegram Trigger on message with photo
-- [ ] Download image, pass to Claude with the Vision message format
-- [ ] Prompt asks Claude to identify the source (withings / strava / meal / other) and extract structured fields
-- [ ] Route to the right Airtable table based on the source
-- [ ] Reply on Telegram confirming what was extracted ("✓ logged: weight 79.4 kg, body fat 14.2%")
-- **DoD:** sending a real Withings screenshot creates a `body_metrics` row with the correct values; sending a meal photo creates a `nutrition_logs` row
-
-### S3-T1 — Tests + early refactors (1h)
-- [ ] Send 3 different screenshot types; verify all routing decisions
-- [ ] Have a chat conversation that crosses Workflow A and B (e.g. "the brief this morning said X, can we change it?")
-- [ ] Fix anything embarrassing
-- **DoD:** smoke test passes; no console errors in n8n executions
-
-**Day 3 total: 5h**
+**Day 2 total: 5h**
 
 ---
 
-## Day 4 — Strava sync + reliability + first end-to-end (Thu)
-**Goal:** Workflow D live, all four workflows have error handling, full end-to-end demo works.
+## Day 3 — Conversational chat (Wed)
+**Goal:** Workflow B is live; the agent can answer coaching questions and modify a session.
 
-### S4-W4 — Workflow D — Strava Sync (2h) — deps: S1-C1
-- [ ] Schedule Trigger every 2 hours
-- [ ] HTTP Request to `https://www.strava.com/api/v3/athlete/activities?after=<24h ago>`
-- [ ] Loop activities, dedup against `daily_logs.strava_activity_id`
-- [ ] For new activities, map fields (Strava → Airtable) and insert
-- [ ] If the activity matches a planned `training_plan` session (same date, same type), update `training_plan.status` to "done"
-- **DoD:** running a Strava-recorded activity → the row appears in `daily_logs` within 2 hours and the matching plan row flips to "done"
+### S3-W2 — Workflow B — Chat Agent (2.5h) ✅ — deps: S2-W1
+- [x] Telegram Trigger on text message
+- [x] Window Memory node (Airtable `chat_memory`, session key = Telegram chat ID)
+- [x] AI Agent node (GPT-4.1) with three tools: `search_knowledge_base`, `update_training_session`, `replan_week`
+- [x] Package Chat Context node: injects athlete profile, week plan, recent logs
+- [x] Reply on Telegram with the agent's response
+- **DoD:** 5-turn conversation works, agent can modify today's session via chat
 
-### S4-R1 — Reliability pass on all workflows (2h) — deps: S2-W1, S3-W2, S3-W3, S4-W4
-- [ ] Add `retryOnFail: true, maxTries: 3, waitBetweenTries: 5000` to every HTTP/AI node
-- [ ] Add an Error Trigger to each workflow → format error → send to a private Telegram "system" channel
-- [ ] Set Workflow A and B to be each other's error workflow (cross-monitoring)
-- [ ] Test by temporarily breaking each workflow (bad URL, bad credential) and confirming the error notification arrives
-- **DoD:** breaking each workflow on purpose produces exactly one Telegram error message with the right fields
+### S3-W3 — Workflow C — Screenshot Ingestion (1.5h) ✅ — deps: S1-C1
+- [x] Telegram Trigger on photo messages; `Photos Only` IF filters out non-photo messages
+- [x] Get File Path + Build Image URL: resolves Telegram file_id to a download URL
+- [x] Classify Image: GPT-4.1 Vision call → one of body_metrics / nutrition / training_summary / other
+- [x] Route by Type: Switch node with 4 branches
+- [x] Branch body_metrics: extract weight_kg, body_fat_pct, muscle_mass_kg → insert to Airtable → Telegram confirmation
+- [x] Branch nutrition: extract meal_type + macros (kcal, P, C, F) → insert to nutrition_logs → Telegram confirmation
+- [x] Branch training_summary: extract activity_type, duration, distance, HR → insert to daily_logs → Telegram confirmation
+- [x] Branch other: polite "cannot process" reply
+- **DoD:** sending a Withings screenshot creates a body_metrics row with correct values and a Telegram confirmation
 
-### S4-E1 — End-to-end demo run (1h)
-- [ ] At 7 AM, the brief arrives (or trigger manually)
-- [ ] Chat with the agent to swap a session
-- [ ] Send a withings screenshot
-- [ ] Do a 20-min Strava-tracked activity
-- [ ] Confirm everything propagates correctly through all 4 workflows + Airtable
-- **DoD:** all 4 workflows ran successfully in one session, no manual intervention beyond the four triggers above
+### S3-W2a — B-tool — Update Session sub-workflow (1h) ✅ — deps: S3-W2
+- [x] Execute Workflow Trigger (passthrough)
+- [x] Find Session by Date via Airtable search with IS_SAME formula + today fallback
+- [x] Prepare Update Fields: regex parse of flat query string (session_type, duration_min, intensity, description, notes)
+- [x] Skip If No Record IF guard (prevents null-ID crash)
+- [x] Update Session Record in Airtable
+- [x] Build Confirmation: returns human-readable result string to parent agent
+- **DoD:** agent can edit any single session by date; null date falls back to today; missing record returns a clear error message
 
-**Day 4 total: 5h**
+### S3-W2b — B-sub — Replan Week sub-workflow (1h) ✅ — deps: S3-W2
+- [x] Execute Workflow Trigger (passthrough)
+- [x] Compute week dates (next Mon–Sun), phase, weeks-to-race
+- [x] Fetch done/skipped sessions to preserve
+- [x] GPT-4.1 generates full 7-day plan as structured JSON
+- [x] Delete existing sessions for the week, bulk-insert new plan
+- [x] Return recap string to parent agent
+- **DoD:** asking the agent to replan the week produces a complete new 7-day plan in Airtable
+
+**Day 3 total: 7h**
 
 ---
 
-## Day 5 — Dashboard + polish + demo prep (Fri)
-**Goal:** Streamlit dashboard, all rubric artefacts complete, demo video recorded, repo pushed final.
+## Day 4 — Weekly Planner + reliability (Thu)
+**Goal:** Workflow E live, all workflows have retry logic, full end-to-end demo works.
 
-### S5-D1 — Streamlit dashboard (3h)
-- [ ] `dashboard/app.py`: 4 pages
-  - **Today**: current brief, today's planned session, today's logged activities
-  - **This week**: training plan table, completion status, daily metrics chart
-  - **Metrics**: body weight evolution (from `body_metrics`), training volume (from `daily_logs`)
-  - **Chat history**: paginated view of `chat_memory`
-- [ ] Connect via `pyairtable`
-- **DoD:** `streamlit run dashboard/app.py` opens a working 4-page app showing real data
+### S4-W4 — Workflow D — Strava Sync (2h) ✅ — deps: S1-C1
+- [x] Schedule Trigger every 2 hours
+- [x] Fetch Strava Activities: last 7 days, up to 50 activities
+- [x] Loop Over Activities (SplitInBatches, batch size 1)
+- [x] Check if Exists: Airtable search on `strava_activity_id` for dedup
+- [x] Is New Activity? IF node: True → insert, False → skip and loop
+- [x] Insert Activity: date, activity_type, duration_min, distance_km, avg_heart_rate, strava_activity_id, notes (Strava activity name)
+- [x] Log Summary: timestamps the sync completion
+- **DoD:** running a Strava-recorded activity → row appears in daily_logs within 2 hours; rerunning the sync does not create duplicates
 
-### S5-P1 — Rubric artefacts (1h)
-- [ ] Finalize `docs/architecture.md` (already drafted)
-- [ ] Finalize `docs/project-specification.md` (already drafted)
-- [ ] Finalize `AGENTS.md` (already drafted)
-- [ ] Populate `skills/` with reusable skill files
-- [ ] Export the 4 n8n workflows as JSON into `workflows/`
-- [ ] Add 2-3 sample reports (saved briefs) to `assets/sample-reports/`
-- **DoD:** every rubric line item maps to a file or section in the repo
+### S4-W5 — Workflow E — Weekly Planner (2.5h) ✅
+- [x] Cron trigger, Friday 1:00 PM (`0 13 * * 5`)
+- [x] Read athlete profile and last 10 daily logs
+- [x] Read Google Calendar for next 7 days (travel detection)
+- [x] GPT-4.1 generates 7 training sessions + 7 nutrition plans + batch cooking (structured output parser enforces JSON schema)
+- [x] Travel-day logic: if location ≠ home city → cap session at 45 min easy Z2 / active recovery
+- [x] Write training sessions to `training_plan`, nutrition plans to `nutrition_plans`
+- [x] Send 3 Telegram messages: training week summary, nutrition week summary, batch cooking list
+- **DoD:** workflow fires Thursday; Airtable shows 7 new sessions and 7 nutrition rows; Telegram receives 3 messages
 
-### S5-V1 — Demo video (1h)
-- [ ] Script: 1 min context, 3 min live demo, 2 min architecture walkthrough, 1 min reflections
-- [ ] Record 5-7 minutes (Loom or OBS)
-- [ ] Upload, embed link in README
-- **DoD:** video uploaded, link in README, watchable end-to-end
+### S4-R1 — Reliability pass (2h) ✅ — deps: S2-W1, S3-W2, S4-W5
+- [x] `retryOnFail: true, maxTries: 3, waitBetweenTries: 5000` on all HTTP / AI / Airtable nodes
+- [x] Rate-limit fix: `contextWindowLength` reduced from 10 to 4 in Chat Agent (prevents TPM overflow on gpt-4.1 30k limit)
+- [x] Session key versioned (`-v2`) to clear poisoned memory after failed tool calls
+- [x] IF guard in B-tool to skip Airtable update when record not found
+- **DoD:** no unhandled crashes in n8n; rate-limit and null-ID errors resolved
 
-### S5-S1 — Stretch goal (optional, 1h)
-- [ ] Meal photo → macros estimation in Workflow C
-- [ ] OR: simple weather node in Workflow A
-- [ ] OR: anything else from the "OUT of scope" list
-- **DoD:** stretch chosen and shipped, or explicitly skipped and noted
+**Day 4 total: 4.5h**
 
-**Day 5 total: 5-6h**
+---
+
+## Day 5 — Dashboard + polish (Fri)
+**Goal:** Streamlit dashboard complete, all rubric artefacts present, demo ready.
+
+### S5-D1 — Streamlit dashboard (3h) ✅
+- [x] `dashboard/Dashboard.py` — Home: today's session card, 7-day week strip, sidebar with phase / weeks-to-race
+- [x] `dashboard/pages/1_Weekly_Plan.py` — Week selector slider, 4 summary metrics, expandable day cards, table view
+- [x] `dashboard/pages/2_Nutrition.py` — Macro charts (Altair), meal checkboxes, GPT-4.1 shopping list builder, share via WhatsApp / Telegram / plain text
+- [x] `dashboard/pages/3_Chat.py` — Chat UI with same 3 tools as Telegram agent; auto-cache refresh after writes
+- [x] `dashboard/pages/4_Metrics.py` — Training volume, body weight / fat trends, adherence donut chart
+- [x] `dashboard/pages/5_Chat_History.py` — Paginated conversation history from Airtable `chat_memory`
+- [x] `dashboard/lib/airtable_client.py` — all Airtable reads/writes
+- [x] `dashboard/lib/chat_engine.py` — OpenAI function-calling loop (3 tools, streaming)
+- **DoD:** `streamlit run dashboard/Dashboard.py` opens a working 6-page app with real data
+
+### S5-P1 — Rubric artefacts (1h) ✅
+- [x] `docs/stories.md` (this file)
+- [x] `docs/project-specification.md`
+- [x] `AGENTS.md`
+- [x] `skills/` with reusable skill files
+- [x] 5 n8n workflow JSONs exported to `workflows/`
+- [x] `README.md` updated to reflect actual delivery
+- **DoD:** every rubric line item maps to a file in the repo
+
+### S5-V1 — Demo prep (1h) ✅
+- [x] Demo walkthrough scripted (see presentation notes)
+- [x] Live end-to-end: brief fires, chat modifies a session, weekly planner generates new week
+- **DoD:** 8-minute demo works end-to-end without manual intervention
+
+**Day 5 total: 5h**
 
 ---
 
@@ -189,21 +201,23 @@
 
 | Risk | Mitigation |
 |---|---|
-| Google Calendar OAuth eats half a day | Pre-create the Google Cloud project tonight; fallback to manual `.ics` import if OAuth fails |
-| Strava refresh token flow is fiddly | Use a one-shot Python script to generate the initial token; the script is in `rag-ingestion/strava-bootstrap.py` (also helpful as a code sample) |
-| RAG returns irrelevant chunks | Reuse the reranking from the bootcamp lab; budget 30 min Day 2 for prompt tuning |
-| Telegram bot can only have one active trigger per token | Use the same bot for all three Telegram-triggered workflows; n8n routes by message type and presence of photo |
-| Vision LLM mis-reads a screenshot | Always show the extracted values in the confirmation message; the athlete can correct via chat |
-| Schedule timezone confusion | Set the n8n instance timezone explicitly to Europe/Paris in Settings before activating Workflow A |
+| Google Calendar OAuth eats half a day | Pre-created Google Cloud project beforehand; fallback to manual context injection |
+| Strava refresh token flow is fiddly | One-shot Python script to generate initial token |
+| RAG returns irrelevant chunks | Cohere reranker on top of Pinecone top-10; 500-token chunk size tuned for paragraph-level content |
+| Telegram bot can only have one active trigger per token | Single bot handles both image and text triggers; routed by message type |
+| OpenAI TPM rate limit (30k for gpt-4.1) | Reduced context window from 10 to 4 turns in Chat Agent |
+| n8n toolWorkflow passes args as flat string | Regex extraction in B-tool; today fallback for missing date |
+
+---
 
 ## Definition of Done — project level
 
-The project is done when all of these are true:
-
-- [ ] All 4 workflows run successfully end-to-end without manual intervention
-- [ ] Daily Briefing fires on schedule (verified by waiting one cycle in production)
-- [ ] At least 2 sample briefs are saved in `assets/sample-reports/`
-- [ ] Streamlit dashboard runs locally and shows real data
-- [ ] All rubric artefacts present and reviewed: README, architecture, schema, stories, project spec, AGENTS.md, skills/
-- [ ] Demo video uploaded, ≤7 minutes
-- [ ] Repo is public on GitHub, commit history shows incremental progress across the 5 days
+- [x] 7 workflows run successfully end-to-end (A, B + B-tool + B-sub, C, D, E)
+- [x] Daily Briefing fires on schedule (9:45 AM)
+- [x] Chat Agent handles tool calls without crashing (update session, replan week, RAG search)
+- [x] Weekly Planner generates 7 sessions + 7 nutrition plans every Thursday
+- [x] Streamlit dashboard runs locally with real data across all 6 pages
+- [x] RAG pipeline: 9 sources ingested, retrieval returns relevant results
+- [x] All rubric artefacts present: README, stories, project-spec, AGENTS.md, skills/
+- [x] Repo on GitHub with commit history showing incremental progress
+- [ ] Demo video uploaded (≤7 minutes) — replaced by live 8-minute presentation

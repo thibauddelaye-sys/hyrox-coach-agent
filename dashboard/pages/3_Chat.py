@@ -12,6 +12,8 @@ load_dotenv(ROOT / ".env")
 import streamlit as st
 from datetime import date, timedelta
 
+from dashboard.lib.styles import inject_bg
+inject_bg("bg_chat.jpg")
 from dashboard.lib import airtable_client as db
 from dashboard.lib import chat_engine
 

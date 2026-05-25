@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 load_dotenv(ROOT / ".env")
 
 import streamlit as st
+from dashboard.lib.styles import inject_bg
+inject_bg("bg_chat.jpg")
 from dashboard.lib import airtable_client as db
 
 st.set_page_config(page_title="Chat History · Hyrox Coach", page_icon="📜", layout="wide")

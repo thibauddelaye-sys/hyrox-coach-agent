@@ -26,6 +26,28 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "b-if-001",
+              "leftValue": "={{ ($json.message.photo || []).length }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b-text-only-filter-001",
+      "name": "Text Messages Only",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1864, 592]
+    },
+    {
+      "parameters": {
         "operation": "search",
         "base": {
           "__rl": true,
@@ -146,7 +168,7 @@
         "promptType": "define",
         "text": "={{ 'Athlete: ' + $json.athlete_name + '\\nDate: ' + $json.today_date + '\\nCoach tone: ' + $json.coach_tone + ' / ' + $json.coach_severity + '\\nActive injuries: ' + $json.injuries_active + '\\nEquipment at home: ' + $json.equipment_home + '\\nTarget race date: ' + $json.hyrox_target_date + '\\n\\nCurrent week plan:\\n' + $json.week_plan_summary + '\\n\\nRecent training:\\n' + $json.recent_strava + '\\n\\nAthlete message: ' + $json.incoming_text }}",
         "options": {
-          "systemMessage": "You are Hyrox Coach, an AI agent providing personalised training and nutrition coaching to a single athlete preparing for Hyrox races. You combine the role of a strength & conditioning coach, an endurance coach, and a sports nutritionist — but you are not a replacement for medical advice, and you say so when relevant.\n\nYou are operating in CONVERSATIONAL ROLE: have a back-and-forth conversation, modify the day's plan when asked, answer coaching questions, and look up information. Replies must stay under 200 words unless the athlete explicitly asks for a long response. End with a question or call to action when the conversation is not naturally closed.\n\nCONTEXT AVAILABLE IN EVERY INVOCATION:\n- athlete_profile: name, target race date, division, equipment, injuries, tone preference\n- training_plan: current week plan (±3 days)\n- recent_strava: last 10 Strava activities\n- today_date: current date\n\nOPERATING PRINCIPLES:\n1. Be specific, never generic. Use numbers, timings, and concrete foods/exercises.\n2. Cite the knowledge base when discussing periodization, nutrient timing, or Hyrox-specific programming.\n3. Use the athlete's context relentlessly — reference phase, recent sessions, or injuries in every reply.\n4. Honor coach_tone and coach_severity from the athlete profile.\n5. Default to safety: if the athlete reports pain or unusual fatigue, recommend rest and/or medical advice.\n6. Stay in scope: Hyrox prep, training, nutrition, recovery only.\n\nTOOLS — when and how to use them:\n- hyrox_knowledge_base: use for \"why\" questions, citation needs, periodization or nutrition specifics\n- update_training_session: call this tool immediately when the athlete asks to change, replace, or plan a session for a specific day — no confirmation needed, just save it. MANDATORY: call the tool FIRST, then write your reply using the confirmation string the tool returns. NEVER write \"updated\", \"saved\", or \"done\" before the tool has been called.\n- replan_week: USE THIS TOOL whenever the athlete wants to change multiple sessions or the whole week (travel, injury, schedule changes, explicit replan request). MANDATORY SEQUENCE: (1) call replan_week FIRST, (2) wait for the tool result, (3) use the recap from the tool result in your reply. NEVER describe a replanned week in text without calling this tool first. NEVER say \"Confirmed\" or \"I've updated\" without having actually called the tool.\n\nIMPORTANT: A Hyrox training week = 7 days, Monday through Sunday, weekends fully included."
+          "systemMessage": "You are Hyrox Coach, an AI agent providing personalised training and nutrition coaching to a single athlete preparing for Hyrox races. You combine the role of a strength & conditioning coach, an endurance coach, and a sports nutritionist — but you are not a replacement for medical advice, and you say so when relevant.\n\nYou are operating in CONVERSATIONAL ROLE: have a back-and-forth conversation, modify the day's plan when asked, answer coaching questions, and look up information. Replies must stay under 200 words unless the athlete explicitly asks for a long response. End with a question or call to action when the conversation is not naturally closed.\n\nCONTEXT AVAILABLE IN EVERY INVOCATION:\n- athlete_profile: name, target race date, division, equipment, injuries, tone preference\n- training_plan: current week plan (±3 days)\n- recent_strava: last 10 Strava activities\n- today_date: current date\n\nOPERATING PRINCIPLES:\n1. Be specific, never generic. Use numbers, timings, and concrete foods/exercises.\n2. Cite the knowledge base when discussing periodization, nutrient timing, or Hyrox-specific programming.\n3. Use the athlete's context relentlessly — reference phase, recent sessions, or injuries in every reply.\n4. Honor coach_tone and coach_severity from the athlete profile.\n5. Default to safety: if the athlete reports pain or unusual fatigue, recommend rest and/or medical advice.\n6. Stay in scope: Hyrox prep, training, nutrition, recovery only.\n\nTOOLS — when and how to use them:\n- hyrox_knowledge_base: use for \"why\" questions, citation needs, periodization or nutrition specifics\n- update_training_session: call this tool immediately when the athlete asks to change, replace, or plan a session for a specific day. MANDATORY: (1) call the tool FIRST, (2) wait for the confirmation string, (3) write your reply using ONLY the exact values in that confirmation — same duration, same description, same intensity. Do NOT invent or rephrase numbers or session details when writing your response. NEVER write \"updated\", \"saved\", or \"done\" before the tool has been called.\n- replan_week: USE THIS TOOL whenever the athlete wants to change multiple sessions or the whole week (travel, injury, schedule changes, explicit replan request). MANDATORY SEQUENCE: (1) call replan_week FIRST, (2) wait for the tool result, (3) use the recap from the tool result in your reply. NEVER describe a replanned week in text without calling this tool first. NEVER say \"Confirmed\" or \"I've updated\" without having actually called the tool.\n\nIMPORTANT: A Hyrox training week = 7 days, Monday through Sunday, weekends fully included."
         }
       },
       "id": "d7043fd6-72c9-4b26-8b1d-45be48a0059f",
@@ -166,7 +188,7 @@
         "model": {
           "__rl": true,
           "mode": "id",
-          "value": "gpt-5.4-mini"
+          "value": "gpt-4.1"
         },
         "builtInTools": {},
         "options": {}
@@ -192,8 +214,8 @@
     {
       "parameters": {
         "sessionIdType": "customKey",
-        "sessionKey": "={{ $('Package Chat Context').first().json.chat_id }}",
-        "contextWindowLength": 10
+        "sessionKey": "={{ $('Package Chat Context').first().json.chat_id }}-v2",
+        "contextWindowLength": 4
       },
       "id": "59bd1cbf-3827-4de9-bd34-b9de66e8486e",
       "name": "Chat Memory",
@@ -294,7 +316,7 @@
           "value": {
             "date": "={{ $fromAI(\"date\", \"ISO date of the session to update\", \"string\") }}",
             "session_type": "={{ $fromAI(\"session_type\", \"New session type, e.g. Rest, Mobility, Z2 endurance\", \"string\") }}",
-            "description": "={{ $fromAI(\"description\", \"New session description\", \"string\") }}",
+            "description": "={{ $fromAI(\"description\", \"Concise coaching description for the session — always include when session_type, duration, or intensity changes\", \"string\") }}",
             "duration_min": "={{ $fromAI(\"duration_min\", \"New duration in minutes\", \"number\") }}",
             "intensity": "={{ $fromAI(\"intensity\", \"New intensity: easy, moderate, hard, or max\", \"string\") }}",
             "notes": "={{ $fromAI(\"notes\", \"Coaching notes for this session\", \"string\") }}"
@@ -585,11 +607,23 @@
       "main": [
         [
           {
-            "node": "Read Athlete Profile",
+            "node": "Text Messages Only",
             "type": "main",
             "index": 0
           }
         ]
+      ]
+    },
+    "Text Messages Only": {
+      "main": [
+        [
+          {
+            "node": "Read Athlete Profile",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     },
     "Read Athlete Profile": {

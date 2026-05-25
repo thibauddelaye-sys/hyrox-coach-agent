@@ -9,10 +9,7 @@
       "name": "Execute Workflow Trigger",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
-      "position": [
-        0,
-        0
-      ]
+      "position": [0, 0]
     },
     {
       "parameters": {
@@ -29,7 +26,7 @@
           "mode": "id",
           "cachedResultName": "training_plan"
         },
-        "filterByFormula": "={{ \"IS_SAME({date}, '\" + $json.date + \"', 'day')\" }}",
+        "filterByFormula": "={{ \"IS_SAME({date}, '\" + ($json.date || (String($json.query || '').match(/\\bdate[^0-9]+(\\d{4}-\\d{2}-\\d{2})/) || String($json.query || '').match(/(\\d{4}-\\d{2}-\\d{2})/) || [])[1] || $now.format('yyyy-MM-dd')) + \"', 'day')\" }}",
         "returnAll": false,
         "limit": 1,
         "options": {}
@@ -38,10 +35,7 @@
       "name": "Find Session by Date",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.2,
-      "position": [
-        208,
-        0
-      ],
+      "position": [208, 0],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 5000,
@@ -55,16 +49,45 @@
     },
     {
       "parameters": {
-        "jsCode": "const input   = $('Execute Workflow Trigger').first().json;\nconst found   = $input.first().json; // result from Find Session by Date\nconst recordId = found.id;\n\nif (!recordId) {\n  // No session found for that date — return an error message\n  return [{ json: { record_id: null, fields: {}, error: 'No session found for date: ' + (input.date || '?') } }];\n}\n\nconst fields = {};\nif (input.session_type && String(input.session_type).trim() !== '') {\n  fields.session_type = String(input.session_type).trim();\n}\nif (input.description && String(input.description).trim() !== '') {\n  fields.description = String(input.description).trim();\n}\nif (input.duration_min !== null && input.duration_min !== undefined && input.duration_min !== '') {\n  const d = parseInt(input.duration_min);\n  if (!isNaN(d)) fields.duration_min = d;\n}\nif (input.intensity && String(input.intensity).trim() !== '') {\n  fields.intensity = String(input.intensity).trim();\n}\nif (input.notes && String(input.notes).trim() !== '') {\n  fields.notes = String(input.notes).trim();\n}\nfields.status = 'modified'; // always mark as modified when agent edits it\n\nreturn [{ json: { record_id: recordId, date: input.date, fields } }];"
+        "jsCode": "const raw = $('Execute Workflow Trigger').first().json;\nconst found = $input.first().json;\nconst recordId = found.id;\n\nlet input = { ...raw };\n\n// Parse fields from flat query string (n8n toolWorkflow passes everything as one string)\nif (input.query) {\n  const q = String(input.query);\n\n  // Date: explicit 'date: YYYY-MM-DD' label takes priority, then any ISO date in text\n  if (!input.date) {\n    const dateM = q.match(/\\bdate[^0-9]+(\\d{4}-\\d{2}-\\d{2})/) || q.match(/(\\d{4}-\\d{2}-\\d{2})/);\n    if (dateM) input.date = dateM[1];\n  }\n\n  // Duration: 'duration_min: N' or 'Nmin'\n  if (!input.duration_min) {\n    const durM = q.match(/duration_min[^\\d]*(\\d+)/) || q.match(/(\\d+)\\s*min/);\n    if (durM) input.duration_min = parseInt(durM[1]);\n  }\n\n  // Intensity\n  if (!input.intensity) {\n    const intM = q.match(/intensity[^a-z]*(easy|moderate|hard|max)/i) || q.match(/\\b(easy|moderate|hard|max)\\b/i);\n    if (intM) input.intensity = intM[1].toLowerCase();\n  }\n\n  // Session type: text before first '(' in query\n  if (!input.session_type) {\n    const stM = q.match(/^([A-Za-z][A-Za-z0-9 ]+?)\\s*[\\(\\-]/);\n    if (stM) input.session_type = stM[1].trim();\n  }\n\n  // Description: text after ' — ' separator (plan summary format) or quoted\n  if (!input.description) {\n    const descM = q.match(/\\u2014\\s*([\\s\\S]+)/) || q.match(/description[^'\"]*['\"](.+?)['\"]/);\n    if (descM) input.description = descM[1].trim();\n  }\n\n  // Notes\n  if (!input.notes) {\n    const notesM = q.match(/notes[^'\"]*['\"](.+?)['\"]/);\n    if (notesM) input.notes = notesM[1];\n  }\n}\n\n// Final fallback: no date found anywhere — assume today\nif (!input.date) {\n  input.date = new Date().toISOString().slice(0, 10);\n}\n\nif (!recordId) {\n  return [{ json: { id: null, fields: {}, error: 'No session found for date: ' + input.date } }];\n}\n\nconst fields = {};\nif (input.session_type && String(input.session_type).trim() !== '') fields.session_type = String(input.session_type).trim();\nif (input.description && String(input.description).trim() !== '') fields.description = String(input.description).trim();\nif (input.duration_min !== null && input.duration_min !== undefined && input.duration_min !== '') {\n  const d = parseInt(input.duration_min);\n  if (!isNaN(d)) fields.duration_min = d;\n}\nif (input.intensity && String(input.intensity).trim() !== '') fields.intensity = String(input.intensity).trim();\nif (input.notes && String(input.notes).trim() !== '') fields.notes = String(input.notes).trim();\nfields.status = 'modified';\n\nreturn [{ json: { id: recordId, date: input.date, fields } }];"
       },
       "id": "863b5adf-137b-43ab-ac28-9db45d1cab40",
       "name": "Prepare Update Fields",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        400,
-        0
-      ]
+      "position": [400, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prep = $input.first().json;\nconst payload = { id: prep.id };\nObject.assign(payload, prep.fields);\nreturn [{ json: payload }];"
+      },
+      "id": "f7e8d9c0-b1a2-4e3f-8d7c-6b5a4c3d2e1f",
+      "name": "Build Update Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [608, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "check-id-not-null",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Skip If No Record",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [712, 0]
     },
     {
       "parameters": {
@@ -82,17 +105,21 @@
           "cachedResultName": "training_plan"
         },
         "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "session_type": "={{ $json.fields.session_type || \"\" }}",
-            "description": "={{ $json.fields.description  || \"\" }}",
-            "duration_min": "={{ $json.fields.duration_min !== undefined ? $json.fields.duration_min : \"\" }}",
-            "intensity": "={{ $json.fields.intensity    || \"\" }}",
-            "notes": "={{ $json.fields.notes        || \"\" }}",
-            "status": "={{ $json.fields.status       || \"modified\" }}"
-          },
-          "matchingColumns": [],
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": ["id"],
           "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
             {
               "id": "session_type",
               "displayName": "session_type",
@@ -171,10 +198,7 @@
       "name": "Update Session Record",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.2,
-      "position": [
-        608,
-        0
-      ],
+      "position": [816, 0],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 5000,
@@ -195,57 +219,31 @@
       "name": "Build Confirmation",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        800,
-        0
-      ]
+      "position": [1024, 0]
     }
   ],
   "pinData": {},
   "connections": {
     "Execute Workflow Trigger": {
-      "main": [
-        [
-          {
-            "node": "Find Session by Date",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Find Session by Date", "type": "main", "index": 0 }]]
     },
     "Find Session by Date": {
-      "main": [
-        [
-          {
-            "node": "Prepare Update Fields",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Prepare Update Fields", "type": "main", "index": 0 }]]
     },
     "Prepare Update Fields": {
+      "main": [[{ "node": "Build Update Payload", "type": "main", "index": 0 }]]
+    },
+    "Build Update Payload": {
+      "main": [[{ "node": "Skip If No Record", "type": "main", "index": 0 }]]
+    },
+    "Skip If No Record": {
       "main": [
-        [
-          {
-            "node": "Update Session Record",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Update Session Record", "type": "main", "index": 0 }],
+        [{ "node": "Build Confirmation", "type": "main", "index": 0 }]
       ]
     },
     "Update Session Record": {
-      "main": [
-        [
-          {
-            "node": "Build Confirmation",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Build Confirmation", "type": "main", "index": 0 }]]
     }
   },
   "active": true,

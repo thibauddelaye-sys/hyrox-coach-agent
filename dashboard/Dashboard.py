@@ -14,12 +14,16 @@ load_dotenv(ROOT / ".env")
 
 import streamlit as st
 
+
 st.set_page_config(
     page_title="Hyrox Coach",
     page_icon="🏃",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+from dashboard.lib.styles import inject_bg
+inject_bg("bg_hyrox.jpg")
 
 from dashboard.lib import airtable_client as db
 from datetime import date, timedelta

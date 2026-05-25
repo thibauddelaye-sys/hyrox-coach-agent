@@ -9,12 +9,20 @@ if str(ROOT) not in sys.path:
 from dotenv import load_dotenv
 load_dotenv(ROOT / ".env")
 
+import os
+import urllib.parse
+import requests
 import streamlit as st
 import altair as alt
 import pandas as pd
 from datetime import date, timedelta
+from openai import OpenAI
 
+from dashboard.lib.styles import inject_bg
+inject_bg("bg_nutrition.jpg")
 from dashboard.lib import airtable_client as db
+
+_openai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 st.set_page_config(page_title="Nutrition · Hyrox Coach", page_icon="🥗", layout="wide")
 st.title("🥗 Nutrition Plan")
@@ -66,6 +74,7 @@ Protein stays constant at **1.8–2.2 g/kg** regardless of session type.
 df = pd.DataFrame(nutrition)
 df["date"] = pd.to_datetime(df["date"]).dt.date
 df = df.sort_values("date")
+df["date_label"] = pd.to_datetime(df["date"]).dt.strftime("%a %d")
 
 st.subheader("📊 Weekly macro overview")
 c1, c2 = st.columns(2)
@@ -76,9 +85,9 @@ with c1:
             alt.Chart(df)
             .mark_bar(color="#e74c3c", cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
             .encode(
-                x=alt.X("date:T", title="Date", axis=alt.Axis(format="%a %d")),
+                x=alt.X("date_label:O", title="Date", sort=None),
                 y=alt.Y("calories:Q", title="Calories (kcal)"),
-                tooltip=["date:T", "calories:Q"],
+                tooltip=["date_label:O", "calories:Q"],
             )
             .properties(title="Daily Calories", height=250)
         )
@@ -87,19 +96,19 @@ with c1:
 with c2:
     macro_cols = [c for c in ["protein_g", "carbs_g", "fat_g"] if c in df.columns]
     if macro_cols:
-        df_melted = df.melt(id_vars=["date"], value_vars=macro_cols, var_name="macro", value_name="grams")
+        df_melted = df.melt(id_vars=["date_label"], value_vars=macro_cols, var_name="macro", value_name="grams")
         df_melted["macro"] = df_melted["macro"].map({"protein_g": "Protein", "carbs_g": "Carbs", "fat_g": "Fat"})
         chart2 = (
             alt.Chart(df_melted)
             .mark_bar()
             .encode(
-                x=alt.X("date:T", title="Date", axis=alt.Axis(format="%a %d")),
+                x=alt.X("date_label:O", title="Date", sort=None),
                 y=alt.Y("grams:Q", title="Grams"),
                 color=alt.Color("macro:N", scale=alt.Scale(
                     domain=["Protein", "Carbs", "Fat"],
                     range=["#3498db", "#f39c12", "#2ecc71"],
                 )),
-                tooltip=["date:T", "macro:N", "grams:Q"],
+                tooltip=["date_label:O", "macro:N", "grams:Q"],
             )
             .properties(title="Macros (g)", height=250)
         )
@@ -108,6 +117,14 @@ with c2:
 # ── Day-by-day meal plans ──────────────────────────────────────────────────────
 st.divider()
 st.subheader("🍽️ Day-by-day meal plans")
+
+def _toggle_day(day_iso: str, n: int) -> None:
+    val = st.session_state[f"selall_{day_iso}"]
+    for idx in range(n):
+        st.session_state[f"sel_{day_iso}_{idx}"] = val
+
+
+selected_meals: list[str] = []
 
 for i in range(7):
     day = week_start + timedelta(days=i)
@@ -132,14 +149,19 @@ for i in range(7):
             with col_a:
                 meals_raw = plan.get("meals", "")
                 if meals_raw:
-                    for slot in meals_raw.split(" / "):
-                        slot = slot.strip()
-                        if slot:
-                            if ":" in slot:
-                                label, content = slot.split(":", 1)
-                                st.markdown(f"**{label.strip()}:** {content.strip()}")
-                            else:
-                                st.markdown(slot)
+                    slots = [s.strip() for s in meals_raw.split(" / ") if s.strip()]
+                    day_iso = day.isoformat()
+                    st.checkbox(
+                        "Select all",
+                        key=f"selall_{day_iso}",
+                        on_change=_toggle_day,
+                        args=(day_iso, len(slots)),
+                    )
+                    st.divider()
+                    for idx, slot in enumerate(slots):
+                        checked = st.checkbox(slot, key=f"sel_{day_iso}_{idx}")
+                        if checked:
+                            selected_meals.append(f"{day.strftime('%A %d %b')}: {slot}")
                 else:
                     st.caption("No meal details available.")
 
@@ -153,3 +175,61 @@ for i in range(7):
                         cols[idx % 2].markdown(f"- {item}")
         else:
             st.caption("No nutrition data for this day.")
+
+# ── Shopping list ──────────────────────────────────────────────────────────────
+st.divider()
+st.subheader("🛒 Shopping list")
+
+if not selected_meals:
+    st.info("Tick the meals you plan to make above — the shopping list will be generated here.")
+else:
+    st.caption(f"{len(selected_meals)} meal{'s' if len(selected_meals) > 1 else ''} selected")
+
+    if st.button("Generate shopping list", type="primary"):
+        with st.spinner("Aggregating ingredients…"):
+            meals_text = "\n".join(selected_meals)
+            result = _openai.chat.completions.create(
+                model="gpt-4.1",
+                max_tokens=600,
+                messages=[{"role": "user", "content": (
+                    f"Based on these selected meals for a Hyrox athlete:\n\n{meals_text}\n\n"
+                    "Generate an aggregated shopping list. "
+                    "Group by category using these exact headers: "
+                    "🥩 Proteins, 🥦 Produce, 🥛 Dairy & Eggs, 🌾 Grains & Carbs, 🫙 Pantry & Condiments. "
+                    "Aggregate quantities where possible (e.g. '500g chicken' not '200g + 300g'). "
+                    "Remove duplicates. Format as a markdown bullet list per category. Be concise."
+                )}],
+            ).choices[0].message.content.strip()
+        st.session_state["shopping_list"] = result
+
+    if st.session_state.get("shopping_list"):
+        shopping_list = st.session_state["shopping_list"]
+        st.markdown(shopping_list)
+
+        st.markdown("**Share**")
+        col_wa, col_tg, col_txt = st.columns(3)
+
+        with col_wa:
+            wa_url = "https://wa.me/?text=" + urllib.parse.quote(shopping_list)
+            st.link_button("📲 WhatsApp", wa_url, use_container_width=True)
+
+        with col_tg:
+            if st.button("✈️ Telegram", use_container_width=True):
+                token   = os.getenv("TELEGRAM_BOT_TOKEN")
+                chat_id = os.getenv("TELEGRAM_ATHLETE_CHAT_ID")
+                if not token or not chat_id:
+                    st.error("TELEGRAM_BOT_TOKEN or TELEGRAM_ATHLETE_CHAT_ID not set in .env")
+                else:
+                    resp = requests.post(
+                        f"https://api.telegram.org/bot{token}/sendMessage",
+                        json={"chat_id": chat_id, "text": shopping_list},
+                        timeout=10,
+                    )
+                    if resp.ok:
+                        st.success("Sent to Telegram!")
+                    else:
+                        st.error(f"Telegram error: {resp.text}")
+
+        with col_txt:
+            if st.button("📋 Plain text", use_container_width=True):
+                st.code(shopping_list, language=None)

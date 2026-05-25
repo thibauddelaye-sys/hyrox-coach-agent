@@ -18,8 +18,9 @@ _PROFILE_TABLE   = os.getenv("AIRTABLE_PROFILE_TABLE",   "tbloi8D9r6OWC5jXp")
 _TRAINING_TABLE  = os.getenv("AIRTABLE_TRAINING_TABLE",  "tblCfdZNzkVH3heRm")
 _LOGS_TABLE      = os.getenv("AIRTABLE_LOGS_TABLE",      "tblHOfZ0PU1zGkeLU")
 _CHAT_TABLE      = os.getenv("AIRTABLE_CHAT_TABLE",      "tbls3jjCO1m5fio0c")
-_NUTRITION_TABLE = os.getenv("AIRTABLE_NUTRITION_TABLE", "")
-_METRICS_TABLE   = os.getenv("AIRTABLE_METRICS_TABLE",   "")
+_NUTRITION_TABLE      = os.getenv("AIRTABLE_NUTRITION_TABLE",      "")
+_NUTRITION_LOGS_TABLE = os.getenv("AIRTABLE_NUTRITION_LOGS_TABLE", "")
+_METRICS_TABLE        = os.getenv("AIRTABLE_METRICS_TABLE",        "")
 
 
 def _api() -> Api:
@@ -166,6 +167,24 @@ def delete_nutrition_by_date_range(start: str, end: str) -> int:
         _table(_NUTRITION_TABLE).delete(rid)
     get_nutrition_plans.clear()
     return len(ids)
+
+
+def insert_body_metrics(record: dict) -> None:
+    if not _METRICS_TABLE:
+        raise ValueError("AIRTABLE_METRICS_TABLE not set in .env")
+    _table(_METRICS_TABLE).create(record, typecast=True)
+    get_body_metrics.clear()
+
+
+def insert_nutrition_log(record: dict) -> None:
+    if not _NUTRITION_LOGS_TABLE:
+        raise ValueError("AIRTABLE_NUTRITION_LOGS_TABLE not set in .env")
+    _table(_NUTRITION_LOGS_TABLE).create(record, typecast=True)
+
+
+def insert_daily_log(record: dict) -> None:
+    _table(_LOGS_TABLE).create(record, typecast=True)
+    get_daily_logs.clear()
 
 
 def log_chat_message(role: str, content: str, session_id: str) -> None:

@@ -84,7 +84,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nif (items.length === 0) {\n  return [{ json: { week_plan: [], today_session: null } }];\n}\n\nconst todayIso = new Date().toISOString().slice(0, 10);\nconst weekPlan = items\n  .map(i => i.json.fields ?? i.json)\n  .filter(f => f && typeof f.date === 'string');\nconst today = weekPlan.find(d => d.date === todayIso) ?? null;\n\nreturn [{ json: { week_plan: weekPlan, today_session: today } }];"
+        "jsCode": "const items = $('Read Week Training Plan').all();\nif (items.length === 0) {\n  return [{ json: { week_plan: [], today_session: null } }];\n}\n\nconst todayIso = new Date().toISOString().slice(0, 10);\nconst weekPlan = items\n  .map(i => i.json.fields ?? i.json)\n  .filter(f => f && typeof f.date === 'string');\nconst today = weekPlan.find(d => d.date === todayIso) ?? null;\n\nreturn [{ json: { week_plan: weekPlan, today_session: today } }];"
       },
       "id": "47d8bf1b-ee69-494c-8ce7-44c59c273ca6",
       "name": "Coalesce Training Plan",
@@ -191,7 +191,7 @@
         "model": {
           "__rl": true,
           "mode": "id",
-          "value": "gpt-4o-mini"
+          "value": "gpt-4.1"
         },
         "builtInTools": {},
         "options": {}
@@ -218,7 +218,7 @@
             {
               "id": "tg-001",
               "name": "telegram_text",
-              "value": "={{ '\\u2600\\uFE0F Daily Brief \\u2014 ' + $('Package Context').first().json.today_date + ' (STUB)\\n\\n' + $json.output }}",
+              "value": "={{ '\\u2600\\uFE0F Daily Brief \\u2014 ' + $('Package Context').first().json.today_date + '\\n\\n' + $json.output }}",
               "type": "string"
             }
           ]
@@ -573,7 +573,7 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "45 9 * * *"
+              "expression": "0 6 * * *"
             }
           ]
         }
