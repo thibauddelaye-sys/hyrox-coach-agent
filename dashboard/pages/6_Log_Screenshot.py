@@ -86,7 +86,7 @@ def llm(prompt: str, max_tokens: int = 400) -> str:
     return resp.choices[0].message.content.strip()
 
 
-# ── Auto-classify + date detection on upload (cached by image fingerprint) ───
+# ── Auto-classify on upload (cached by image fingerprint) ───────────────────
 img_key = hashlib.md5(img_bytes).hexdigest()
 
 if st.session_state.get("img_key") != img_key:
@@ -103,26 +103,25 @@ if st.session_state.get("img_key") != img_key:
         valid = {"body_metrics", "nutrition"}
         c = raw_cls.strip().lower()
         st.session_state.classification = c if c in valid else "other"
-
-        # For body metrics, attempt to extract the date shown on screen
-        detected = None
-        if st.session_state.classification == "body_metrics":
-            raw_date = vision(
-                "Look at this image. Find any date or timestamp displayed on the screen "
-                "(e.g. on a Withings scale, smartwatch, or app header). "
-                "Return ONLY an ISO date in YYYY-MM-DD format, nothing else. "
-                "If no date is visible, return 'unknown'.",
-                max_tokens=15,
-            )
-            try:
-                detected = date.fromisoformat(raw_date.strip())
-            except Exception:
-                detected = None
-        st.session_state.detected_date = detected
         st.session_state.img_key = img_key
 
-classification  = st.session_state.classification
-detected_date   = st.session_state.get("detected_date")
+classification = st.session_state.classification
+
+# ── Date picker dialog ────────────────────────────────────────────────────────
+_date_key = f"log_date_{img_key}"
+
+@st.dialog("📅 When was this?")
+def _pick_date():
+    d = st.date_input("Date", value=date.today(), label_visibility="collapsed")
+    if st.button("Confirm", type="primary", use_container_width=True):
+        st.session_state[_date_key] = d
+        st.rerun()
+
+if classification != "other" and _date_key not in st.session_state:
+    _pick_date()
+    st.stop()
+
+log_date = st.session_state.get(_date_key, date.today())
 
 # ── Layout ───────────────────────────────────────────────────────────────────
 col_img, col_result = st.columns([1, 2])
@@ -141,12 +140,12 @@ with col_result:
         )
         st.stop()
 
-    # ── Date picker ──────────────────────────────────────────────────────────
-    if classification == "body_metrics" and detected_date:
-        st.caption(f"📅 Date detected from screenshot: **{detected_date.strftime('%A %d %b %Y')}**")
-        log_date = st.date_input("Confirm or change date", value=detected_date)
-    else:
-        log_date = st.date_input("Date", value=date.today())
+    # ── Date — shown as a caption with a change button ───────────────────────
+    col_date, col_change = st.columns([3, 1])
+    col_date.caption(f"📅 Logging for **{log_date.strftime('%A %d %b %Y')}**")
+    if col_change.button("Change date", use_container_width=True):
+        del st.session_state[_date_key]
+        st.rerun()
 
     # Meal-specific fields — only rendered when the image is a meal
     meal_type_override = "lunch"
