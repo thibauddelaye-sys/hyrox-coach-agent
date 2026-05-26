@@ -176,10 +176,26 @@ def insert_body_metrics(record: dict) -> None:
     get_body_metrics.clear()
 
 
+@st.cache_data(ttl=300)
+def get_nutrition_logs(start: str, end: str) -> list[dict]:
+    if not _NUTRITION_LOGS_TABLE:
+        return []
+    try:
+        formula = (
+            f"AND(NOT(IS_BEFORE({{date}},'{start}')), "
+            f"NOT(IS_AFTER({{date}},'{end}')))"
+        )
+        records = _table(_NUTRITION_LOGS_TABLE).all(formula=formula)
+        return [{"id": r["id"], **r.get("fields", {})} for r in records]
+    except Exception:
+        return []
+
+
 def insert_nutrition_log(record: dict) -> None:
     if not _NUTRITION_LOGS_TABLE:
         raise ValueError("AIRTABLE_NUTRITION_LOGS_TABLE not set in .env")
     _table(_NUTRITION_LOGS_TABLE).create(record, typecast=True)
+    get_nutrition_logs.clear()
 
 
 def insert_daily_log(record: dict) -> None:

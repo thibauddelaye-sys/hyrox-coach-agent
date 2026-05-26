@@ -44,11 +44,13 @@ st.caption(f"📅 {week_start.strftime('%d %b')} — {week_end.strftime('%d %b %
 
 if st.button("🔄 Refresh"):
     db.get_nutrition_plans.clear()
+    db.get_nutrition_logs.clear()
     st.rerun()
 
 # ── Load nutrition data ────────────────────────────────────────────────────────
-nutrition = db.get_nutrition_plans(week_start.isoformat(), week_end.isoformat())
-sessions  = db.get_training_sessions(week_start.isoformat(), week_end.isoformat())
+nutrition  = db.get_nutrition_plans(week_start.isoformat(), week_end.isoformat())
+sessions   = db.get_training_sessions(week_start.isoformat(), week_end.isoformat())
+photo_logs = db.get_nutrition_logs(week_start.isoformat(), week_end.isoformat())
 
 if not nutrition:
     st.info(
@@ -113,6 +115,53 @@ with c2:
             .properties(title="Macros (g)", height=250)
         )
         st.altair_chart(chart2, use_container_width=True)
+
+# ── Calories: planned vs logged ───────────────────────────────────────────────
+st.divider()
+st.subheader("📸 Calories: planned vs logged")
+
+# Build per-day sums
+rows = []
+for i in range(7):
+    day = (week_start + timedelta(days=i)).isoformat()
+    day_label = (week_start + timedelta(days=i)).strftime("%a %d")
+
+    planned = next(
+        (n.get("calories") for n in nutrition if str(n.get("date", ""))[:10] == day),
+        None,
+    )
+    logged = sum(
+        float(l.get("estimated_kcal") or 0)
+        for l in photo_logs
+        if str(l.get("date", ""))[:10] == day
+    )
+
+    if planned is not None:
+        rows.append({"day": day_label, "type": "Planned", "kcal": float(planned)})
+    rows.append({"day": day_label, "type": "Logged", "kcal": round(logged)})
+
+if any(r["kcal"] > 0 for r in rows):
+    df_track = pd.DataFrame(rows)
+    chart_track = (
+        alt.Chart(df_track)
+        .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
+        .encode(
+            x=alt.X("day:O", title="Day", sort=None),
+            y=alt.Y("kcal:Q", title="Calories (kcal)"),
+            color=alt.Color(
+                "type:N",
+                scale=alt.Scale(domain=["Planned", "Logged"], range=["#3498db", "#e74c3c"]),
+                legend=alt.Legend(title=""),
+            ),
+            xOffset="type:N",
+            tooltip=["day:O", "type:N", "kcal:Q"],
+        )
+        .properties(height=260)
+    )
+    st.altair_chart(chart_track, use_container_width=True)
+    st.caption("**Planned** = target from the weekly nutrition plan · **Logged** = sum of meals photographed via Log Screenshot")
+else:
+    st.info("No photo logs yet for this week. Use **Log Screenshot** to track your meals.")
 
 # ── Day-by-day meal plans ──────────────────────────────────────────────────────
 st.divider()

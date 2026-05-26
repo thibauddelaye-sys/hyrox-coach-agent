@@ -2,6 +2,7 @@
 
 import sys
 import base64
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -47,18 +48,12 @@ img_bytes = source.read()
 mime = source.type or "image/jpeg"
 data_url = f"data:{mime};base64,{base64.b64encode(img_bytes).decode()}"
 
-col_img, col_result = st.columns([1, 2])
-with col_img:
-    label = source.name if uploaded else "Camera capture"
-    st.image(img_bytes, caption=label, use_container_width=True)
-
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 LABEL = {
-    "body_metrics":      "⚖️ Body metrics",
-    "nutrition":         "🥗 Nutrition / meal",
-    "training_summary":  "🏋️ Training summary",
-    "other":             "❓ Other",
+    "body_metrics": "⚖️ Body metrics",
+    "nutrition":    "🥗 Nutrition / meal",
+    "other":        "❓ Other",
 }
 
 
@@ -91,49 +86,62 @@ def llm(prompt: str, max_tokens: int = 400) -> str:
     return resp.choices[0].message.content.strip()
 
 
-MEAL_OPTIONS = ["breakfast", "lunch", "dinner", "snack"]
+# ── Auto-classify on upload (cached by image fingerprint) ───────────────────
+img_key = hashlib.md5(img_bytes).hexdigest()
+
+if st.session_state.get("img_key") != img_key:
+    with st.spinner("Analysing image…"):
+        raw_cls = vision(
+            "Look at this image. Classify it as ONE of: "
+            "body_metrics, nutrition, other.\n"
+            "- body_metrics: scale/Withings/Garmin showing weight, body fat %, muscle mass\n"
+            "- nutrition: food photos, restaurant menus, nutrition labels, meal app screenshots\n"
+            "- other: anything else (training summaries, maps, etc.)\n\n"
+            "Reply with ONLY the category name, nothing else.",
+            max_tokens=20,
+        )
+        valid = {"body_metrics", "nutrition"}
+        c = raw_cls.strip().lower()
+        st.session_state.classification = c if c in valid else "other"
+        st.session_state.img_key = img_key
+
+classification = st.session_state.classification
+
+# ── Layout ───────────────────────────────────────────────────────────────────
+col_img, col_result = st.columns([1, 2])
+
+with col_img:
+    label = source.name if uploaded else "Camera capture"
+    st.image(img_bytes, caption=label, use_container_width=True)
+    st.info(f"Detected: **{LABEL[classification]}**")
 
 with col_result:
-    meal_type_override = st.selectbox(
-        "Meal type",
-        options=MEAL_OPTIONS,
-        index=1,
-        format_func=lambda x: x.capitalize(),
-    )
+    if classification == "other":
+        st.warning(
+            "I can't extract structured data from this screenshot type. "
+            "Try a Withings body scan or a food photo. "
+            "Training activities are synced automatically via Strava."
+        )
+        st.stop()
 
-    meal_description = st.text_area(
-        "Describe your meal (optional — helps the AI be more accurate)",
-        placeholder="e.g. chicken breast with rice and broccoli, ~200g chicken",
-        height=80,
-    )
+    # Meal-specific fields — only rendered when the image is a meal
+    meal_type_override = "lunch"
+    meal_description = ""
+    if classification == "nutrition":
+        meal_type_override = st.selectbox(
+            "Meal type",
+            options=["breakfast", "lunch", "dinner", "snack"],
+            index=1,
+            format_func=lambda x: x.capitalize(),
+        )
+        meal_description = st.text_area(
+            "Describe your meal (optional — helps the AI be more accurate)",
+            placeholder="e.g. chicken breast with rice and broccoli, ~200g chicken",
+            height=80,
+        )
 
-    if st.button("🔍 Analyse & Log", type="primary", use_container_width=True):
-        # ── Step 1: classify ───────────────────────────────────────────────────
-        with st.spinner("Classifying…"):
-            classification = vision(
-                "Look at this image. Classify it as ONE of: "
-                "body_metrics, nutrition, training_summary, other.\n"
-                "- body_metrics: scale/Withings/Garmin showing weight, body fat %, muscle mass\n"
-                "- nutrition: food photos, restaurant menus, nutrition labels, meal app screenshots\n"
-                "- training_summary: Strava/Garmin/app screenshots showing a completed workout\n"
-                "- other: anything else\n\n"
-                "Reply with ONLY the category name, nothing else.",
-                max_tokens=20,
-            )
-            valid = {"body_metrics", "nutrition", "training_summary"}
-            if classification not in valid:
-                classification = "other"
+    if st.button("📥 Log", type="primary", use_container_width=True):
 
-        st.info(f"Detected: **{LABEL[classification]}**")
-
-        if classification == "other":
-            st.warning(
-                "I can't extract structured data from this screenshot type. "
-                "Try a Withings body scan, a Strava summary, or a food photo."
-            )
-            st.stop()
-
-        # ── Step 2: extract + log ──────────────────────────────────────────────
         if classification == "body_metrics":
             with st.spinner("Extracting body metrics…"):
                 raw = vision(
@@ -190,14 +198,14 @@ with col_result:
                 st.stop()
 
             record = {k: v for k, v in {
-                "date":               date.today().isoformat(),
-                "meal_type":          meal_type_override,
-                "description":        data.get("description", ""),
-                "estimated_kcal":     data.get("estimated_kcal"),
-                "estimated_protein_g":data.get("estimated_protein_g"),
-                "estimated_carbs_g":  data.get("estimated_carbs_g"),
-                "estimated_fat_g":    data.get("estimated_fat_g"),
-                "source":             "photo",
+                "date":                date.today().isoformat(),
+                "meal_type":           meal_type_override,
+                "description":         data.get("description", ""),
+                "estimated_kcal":      data.get("estimated_kcal"),
+                "estimated_protein_g": data.get("estimated_protein_g"),
+                "estimated_carbs_g":   data.get("estimated_carbs_g"),
+                "estimated_fat_g":     data.get("estimated_fat_g"),
+                "source":              "photo",
             }.items() if v is not None}
 
             try:
@@ -215,18 +223,14 @@ with col_result:
             if record.get("description"):
                 st.caption(record["description"])
 
-            # ── Step 3: assessment vs today's training session ─────────────────
             st.divider()
             with st.spinner("Assessing meal vs your training day…"):
                 session = db.find_session_by_date(date.today().isoformat())
-                if session:
-                    session_context = (
-                        f"Today's planned session: {session.get('session_type', session.get('activity_type', 'unknown'))} — "
-                        f"{session.get('focus', '')} {session.get('notes', '')}".strip()
-                    )
-                else:
-                    session_context = "No training session planned today (rest day)."
-
+                session_context = (
+                    f"Today's planned session: {session.get('session_type', session.get('activity_type', 'unknown'))} — "
+                    f"{session.get('focus', '')} {session.get('notes', '')}".strip()
+                    if session else "No training session planned today (rest day)."
+                )
                 assessment = llm(
                     f"You are a sports nutritionist coaching a Hyrox athlete.\n\n"
                     f"{session_context}\n\n"
@@ -246,37 +250,3 @@ with col_result:
 </div>
 """, unsafe_allow_html=True)
 
-        elif classification == "training_summary":
-            with st.spinner("Extracting activity data…"):
-                raw = vision(
-                    'Extract activity data. Return ONLY valid JSON, no markdown:\n\n'
-                    '{"activity_type": "<e.g. Running, Cycling, WeightTraining, Rowing>", '
-                    '"duration_min": <number>, "distance_km": <number or null>, '
-                    '"avg_heart_rate": <number or null>, '
-                    '"perceived_effort": "easy" or "moderate" or "hard" or "max"}\n\n'
-                    'Convert miles to km. Infer perceived_effort from pace/HR if not shown.',
-                    max_tokens=200,
-                )
-            try:
-                data = parse_json(raw)
-            except Exception:
-                st.error(f"Could not parse LLM response:\n\n{raw}")
-                st.stop()
-
-            record = {k: v for k, v in {
-                "date":             date.today().isoformat(),
-                "activity_type":    data.get("activity_type", "Unknown"),
-                "duration_min":     data.get("duration_min"),
-                "distance_km":      data.get("distance_km"),
-                "avg_heart_rate":   data.get("avg_heart_rate"),
-                "perceived_effort": data.get("perceived_effort", "moderate"),
-                "notes":            "Logged from screenshot via dashboard",
-            }.items() if v is not None}
-
-            db.insert_daily_log(record)
-
-            st.success(f"✅ {record.get('activity_type', 'Activity')} logged!")
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Duration", f"{data.get('duration_min', '?')} min")
-            if data.get("distance_km"):    c2.metric("Distance", f"{data['distance_km']} km")
-            if data.get("avg_heart_rate"): c3.metric("Avg HR",   f"{data['avg_heart_rate']} bpm")
