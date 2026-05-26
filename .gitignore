@@ -42,3 +42,11 @@ node_modules/
 # Scratch / temp files
 mcp_sort.txt
 req.txt
+
+# Backup data - personal (keep local only)
+backups/*/airtable-csv/*.csv
+
+
+# Backup data - personal (keep local only)
+backups/*/airtable-csv/*.csv
+

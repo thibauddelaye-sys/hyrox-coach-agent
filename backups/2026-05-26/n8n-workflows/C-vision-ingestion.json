@@ -1,0 +1,1023 @@
+{
+  "name": "Hyrox - C - Vision Screenshot Ingestion",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "f0f409ab-f565-46df-b8ff-dcfaba20a8b0",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1568,
+        608
+      ],
+      "webhookId": "hyrox-c-webhook-001",
+      "credentials": {
+        "telegramApi": {
+          "id": "BPENTF4zNdVV7dTH",
+          "name": "Telegram - Hyrox Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c-if-001",
+              "leftValue": "={{ ($json.message.photo || []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "73198e79-f896-4045-969a-10473769f416",
+      "name": "Photos Only",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1344,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $('Telegram Trigger').first().json.message.photo[$('Telegram Trigger').first().json.message.photo.length - 1].file_id }}",
+        "additionalFields": {}
+      },
+      "id": "baa721d5-52ba-4bbb-9877-211715360dec",
+      "name": "Get File Path",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1120,
+        608
+      ],
+      "webhookId": "236a3e8a-22f7-4a0b-9d82-5bc3700f4fa4",
+      "credentials": {
+        "telegramApi": {
+          "id": "BPENTF4zNdVV7dTH",
+          "name": "Telegram - Hyrox Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const filePath = $('Get File Path').first().json.file_path;\nconst chatId = String($('Telegram Trigger').first().json.message?.chat?.id || '');\nconst token = process.env.TELEGRAM_BOT_TOKEN || '';\nif (!token) throw new Error('TELEGRAM_BOT_TOKEN env var not set in n8n');\nreturn [{ json: {\n  image_url: `https://api.telegram.org/file/bot${token}/${filePath}`,\n  chat_id: chatId\n} }];"
+      },
+      "id": "5c5a95e9-290d-41aa-aa0b-dc18b90656b8",
+      "name": "Build Image URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "string",
+        "body": "={{ JSON.stringify({ model: 'gpt-4.1', max_tokens: 20, messages: [{ role: 'user', content: [{ type: 'text', text: 'Look at this image. Classify it as ONE of: body_metrics, nutrition, training_summary, other.\\n- body_metrics: scale/Withings/Garmin Body screenshots showing weight, body fat %, muscle mass\\n- nutrition: food photos, restaurant menus, nutrition labels, meal screenshots from apps\\n- training_summary: Strava/Garmin/training app screenshots showing a workout summary\\n- other: anything else\\n\\nReply with ONLY the category name, nothing else. No explanation, no markdown.' }, { type: 'image_url', image_url: { url: $json.image_url } }] }] }) }}",
+        "options": {}
+      },
+      "id": "d4026236-70c5-4919-b90f-3f5f55fb88a4",
+      "name": "Classify Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -672,
+        608
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YGWEA0vPHv8srLC6",
+          "name": "OpenAI - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $input.first().json.choices?.[0]?.message?.content?.trim() || 'other';\nconst valid = ['body_metrics', 'nutrition', 'training_summary'];\nconst classification = valid.includes(content) ? content : 'other';\nreturn [{ json: {\n  classification,\n  image_url: $('Build Image URL').first().json.image_url,\n  chat_id: $('Build Image URL').first().json.chat_id\n} }];"
+      },
+      "id": "0c78cc72-adc2-4277-a402-217c49c8b4c4",
+      "name": "Extract Classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-r0",
+                    "leftValue": "={{ $json.classification }}",
+                    "rightValue": "body_metrics",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-r1",
+                    "leftValue": "={{ $json.classification }}",
+                    "rightValue": "nutrition",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-r2",
+                    "leftValue": "={{ $json.classification }}",
+                    "rightValue": "training_summary",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "8fe96e9a-dbb9-4319-b84c-f62f6afcd964",
+      "name": "Route by Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -224,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "string",
+        "body": "={{ JSON.stringify({ model: 'gpt-4.1', max_tokens: 200, messages: [{ role: 'user', content: [{ type: 'text', text: 'Extract these fields from the body composition screenshot. Return ONLY valid JSON, no markdown, no explanation:\\n\\n{\"weight_kg\": <number or null>, \"body_fat_pct\": <number or null>, \"muscle_mass_kg\": <number or null>, \"screenshot_source\": \"withings\" or \"garmin\" or \"myfitnesspal\" or \"other\"}\\n\\nIf a field is not visible, set it to null. Assume metric units if ambiguous.' }, { type: 'image_url', image_url: { url: $json.image_url } }] }] }) }}",
+        "options": {}
+      },
+      "id": "abbbcfba-0219-445e-8f2b-28cd80b34c33",
+      "name": "Extract Body Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YGWEA0vPHv8srLC6",
+          "name": "OpenAI - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $input.first().json.choices?.[0]?.message?.content || '{}';\nconst cleaned = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\nlet data = {};\ntry { data = JSON.parse(cleaned); } catch(e) { data = {}; }\nreturn [{ json: {\n  weight_kg: data.weight_kg ?? null,\n  body_fat_pct: data.body_fat_pct ?? null,\n  muscle_mass_kg: data.muscle_mass_kg ?? null,\n  screenshot_source: data.screenshot_source ?? 'other',\n  chat_id: $('Route by Type').first().json.chat_id,\n  image_url: $('Route by Type').first().json.image_url\n} }];"
+      },
+      "id": "0e664b7a-3b0e-4473-8947-999cc3b5ae5e",
+      "name": "Parse Body JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl2dTgnkXXRv6tJN",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ $now.toFormat('yyyy-MM-dd') }}",
+            "weight_kg": "={{ $json.weight_kg }}",
+            "body_fat_pct": "={{ $json.body_fat_pct }}",
+            "muscle_mass_kg": "={{ $json.muscle_mass_kg }}",
+            "screenshot_source": "={{ $json.screenshot_source }}",
+            "screenshot_url": "={{ $json.image_url }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "weight_kg",
+              "displayName": "weight_kg",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "body_fat_pct",
+              "displayName": "body_fat_pct",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "muscle_mass_kg",
+              "displayName": "muscle_mass_kg",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "screenshot_source",
+              "displayName": "screenshot_source",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "screenshot_url",
+              "displayName": "screenshot_url",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7febca8c-2d21-4f6f-bd2a-be100b7d12d1",
+      "name": "Insert Body Metrics",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse Body JSON').first().json.chat_id }}",
+        "text": "={{ '✅ Logged body metrics: ' + ($('Parse Body JSON').first().json.weight_kg ?? '?') + 'kg, ' + ($('Parse Body JSON').first().json.body_fat_pct ?? '?') + '% BF' + ($('Parse Body JSON').first().json.muscle_mass_kg ? ', ' + $('Parse Body JSON').first().json.muscle_mass_kg + 'kg muscle' : '') }}",
+        "additionalFields": {}
+      },
+      "id": "f4afe4d7-3789-4b9a-9af1-4910def9ce30",
+      "name": "Confirm Body",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        672,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "webhookId": "4bc4bbe9-d574-4464-9a6c-af667c89e09d",
+      "credentials": {
+        "telegramApi": {
+          "id": "BPENTF4zNdVV7dTH",
+          "name": "Telegram - Hyrox Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "string",
+        "body": "={{ JSON.stringify({ model: 'gpt-4.1', max_tokens: 300, messages: [{ role: 'user', content: [{ type: 'text', text: 'Extract meal information from this food photo or nutrition screenshot. Return ONLY valid JSON, no markdown:\\n\\n{\"meal_type\": \"breakfast\" or \"lunch\" or \"dinner\" or \"snack\", \"description\": \"<concise description, max 150 chars>\", \"estimated_kcal\": <number>, \"estimated_protein_g\": <number>, \"estimated_carbs_g\": <number>, \"estimated_fat_g\": <number>}\\n\\nIf the screenshot already shows macros from an app, use those exactly. If it is a food photo, estimate macros for the visible portion.' }, { type: 'image_url', image_url: { url: $json.image_url } }] }] }) }}",
+        "options": {}
+      },
+      "id": "936c9a10-ca03-4e9d-b4b3-fdacdbd400f3",
+      "name": "Extract Nutrition",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        400
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YGWEA0vPHv8srLC6",
+          "name": "OpenAI - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $input.first().json.choices?.[0]?.message?.content || '{}';\nconst cleaned = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\nlet data = {};\ntry { data = JSON.parse(cleaned); } catch(e) { data = {}; }\nreturn [{ json: {\n  meal_type: data.meal_type ?? 'snack',\n  description: data.description ?? '',\n  estimated_kcal: data.estimated_kcal ?? null,\n  estimated_protein_g: data.estimated_protein_g ?? null,\n  estimated_carbs_g: data.estimated_carbs_g ?? null,\n  estimated_fat_g: data.estimated_fat_g ?? null,\n  chat_id: $('Route by Type').first().json.chat_id\n} }];"
+      },
+      "id": "1ae75091-7112-48bb-9084-ae75ea03c942",
+      "name": "Parse Nutrition JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl5KqljLUxS2Pz8K",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ $now.toFormat('yyyy-MM-dd') }}",
+            "meal_type": "={{ $json.meal_type }}",
+            "description": "={{ $json.description }}",
+            "estimated_kcal": "={{ $json.estimated_kcal }}",
+            "estimated_protein_g": "={{ $json.estimated_protein_g }}",
+            "estimated_carbs_g": "={{ $json.estimated_carbs_g }}",
+            "estimated_fat_g": "={{ $json.estimated_fat_g }}",
+            "source": "photo"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "meal_type",
+              "displayName": "meal_type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "estimated_kcal",
+              "displayName": "estimated_kcal",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "estimated_protein_g",
+              "displayName": "estimated_protein_g",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "estimated_carbs_g",
+              "displayName": "estimated_carbs_g",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "estimated_fat_g",
+              "displayName": "estimated_fat_g",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4503cc73-554a-4632-b8b5-7ba847b6ebb0",
+      "name": "Insert Nutrition",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        400
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse Nutrition JSON').first().json.chat_id }}",
+        "text": "={{ '✅ Logged ' + $('Parse Nutrition JSON').first().json.meal_type + ': ' + $('Parse Nutrition JSON').first().json.description + ' (~' + ($('Parse Nutrition JSON').first().json.estimated_kcal ?? '?') + ' kcal | ' + ($('Parse Nutrition JSON').first().json.estimated_protein_g ?? '?') + 'g P · ' + ($('Parse Nutrition JSON').first().json.estimated_carbs_g ?? '?') + 'g C · ' + ($('Parse Nutrition JSON').first().json.estimated_fat_g ?? '?') + 'g F)' }}",
+        "additionalFields": {}
+      },
+      "id": "ebcac11f-e942-4c07-9726-b7ff4c58490f",
+      "name": "Confirm Nutrition",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        672,
+        400
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "webhookId": "18f8d254-1f84-427d-a4c9-6c407acf82fc",
+      "credentials": {
+        "telegramApi": {
+          "id": "BPENTF4zNdVV7dTH",
+          "name": "Telegram - Hyrox Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "string",
+        "body": "={{ JSON.stringify({ model: 'gpt-4.1', max_tokens: 200, messages: [{ role: 'user', content: [{ type: 'text', text: 'Extract activity data from this training app screenshot. Return ONLY valid JSON, no markdown:\\n\\n{\"activity_type\": \"<e.g. Running, Cycling, WeightTraining, Rowing>\", \"duration_min\": <number>, \"distance_km\": <number or null>, \"avg_heart_rate\": <number or null>, \"perceived_effort\": \"easy\" or \"moderate\" or \"hard\" or \"max\"}\\n\\nUse the units visible in the screenshot. Convert miles to km if needed. If perceived_effort is not shown, infer it from pace/HR.' }, { type: 'image_url', image_url: { url: $json.image_url } }] }] }) }}",
+        "options": {}
+      },
+      "id": "f821d6dc-0590-48ef-933f-52ebdbc8b184",
+      "name": "Extract Training",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        800
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YGWEA0vPHv8srLC6",
+          "name": "OpenAI - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $input.first().json.choices?.[0]?.message?.content || '{}';\nconst cleaned = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\nlet data = {};\ntry { data = JSON.parse(cleaned); } catch(e) { data = {}; }\nreturn [{ json: {\n  activity_type: data.activity_type ?? 'Unknown',\n  duration_min: data.duration_min ?? null,\n  distance_km: data.distance_km ?? null,\n  avg_heart_rate: data.avg_heart_rate ?? null,\n  perceived_effort: data.perceived_effort ?? 'moderate',\n  chat_id: $('Route by Type').first().json.chat_id\n} }];"
+      },
+      "id": "f0296eda-5776-45d6-aa3b-4877e13b2db2",
+      "name": "Parse Training JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblHOfZ0PU1zGkeLU",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ $now.toFormat('yyyy-MM-dd') }}",
+            "activity_type": "={{ $json.activity_type }}",
+            "duration_min": "={{ $json.duration_min }}",
+            "distance_km": "={{ $json.distance_km }}",
+            "avg_heart_rate": "={{ $json.avg_heart_rate }}",
+            "perceived_effort": "={{ $json.perceived_effort }}",
+            "notes": "Logged from screenshot via Workflow C"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "activity_type",
+              "displayName": "activity_type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "duration_min",
+              "displayName": "duration_min",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "distance_km",
+              "displayName": "distance_km",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "avg_heart_rate",
+              "displayName": "avg_heart_rate",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "perceived_effort",
+              "displayName": "perceived_effort",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d40a2207-c977-49c7-ab24-bfc4f94eace5",
+      "name": "Insert Training",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        800
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse Training JSON').first().json.chat_id }}",
+        "text": "={{ '✅ Logged activity: ' + $('Parse Training JSON').first().json.activity_type + ' ' + ($('Parse Training JSON').first().json.duration_min ?? '?') + 'min' + ($('Parse Training JSON').first().json.distance_km ? ' · ' + $('Parse Training JSON').first().json.distance_km + 'km' : '') + ($('Parse Training JSON').first().json.avg_heart_rate ? ' · ' + $('Parse Training JSON').first().json.avg_heart_rate + 'bpm avg' : '') }}",
+        "additionalFields": {}
+      },
+      "id": "e96ed60c-ba3c-4399-bac5-943b0a1f9c3f",
+      "name": "Confirm Training",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        672,
+        800
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "webhookId": "e787d6fa-8b40-4fcd-9789-98c9f55e81d0",
+      "credentials": {
+        "telegramApi": {
+          "id": "BPENTF4zNdVV7dTH",
+          "name": "Telegram - Hyrox Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Route by Type').first().json.chat_id }}",
+        "text": "🤔 I cannot extract structured data from this screenshot type yet. Try a screenshot from Withings, Strava, or a food photo.",
+        "additionalFields": {}
+      },
+      "id": "7b475177-8af1-4b0c-9aec-fb6b842097fe",
+      "name": "Reply Other",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1200
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "webhookId": "87452b95-0ede-4a82-9556-3f4d62605786",
+      "credentials": {
+        "telegramApi": {
+          "id": "BPENTF4zNdVV7dTH",
+          "name": "Telegram - Hyrox Bot"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Photos Only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Photos Only": {
+      "main": [
+        [
+          {
+            "node": "Get File Path",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get File Path": {
+      "main": [
+        [
+          {
+            "node": "Build Image URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Image URL": {
+      "main": [
+        [
+          {
+            "node": "Classify Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Image": {
+      "main": [
+        [
+          {
+            "node": "Extract Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Classification": {
+      "main": [
+        [
+          {
+            "node": "Route by Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Type": {
+      "main": [
+        [
+          {
+            "node": "Extract Body Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract Nutrition",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract Training",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply Other",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Body Metrics": {
+      "main": [
+        [
+          {
+            "node": "Parse Body JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Body JSON": {
+      "main": [
+        [
+          {
+            "node": "Insert Body Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Body Metrics": {
+      "main": [
+        [
+          {
+            "node": "Confirm Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Nutrition": {
+      "main": [
+        [
+          {
+            "node": "Parse Nutrition JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Nutrition JSON": {
+      "main": [
+        [
+          {
+            "node": "Insert Nutrition",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Nutrition": {
+      "main": [
+        [
+          {
+            "node": "Confirm Nutrition",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Training": {
+      "main": [
+        [
+          {
+            "node": "Parse Training JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Training JSON": {
+      "main": [
+        [
+          {
+            "node": "Insert Training",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Training": {
+      "main": [
+        [
+          {
+            "node": "Confirm Training",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "0436a28c-67ef-4f08-8727-77a411eaf54b",
+  "meta": {
+    "instanceId": "6d560a8671cba66bb83c5709708889570d8da58c18b1dfc9fa41ebdbb998c2bb"
+  },
+  "id": "pJw3i8o3Dn3Jri2A",
+  "tags": []
+}

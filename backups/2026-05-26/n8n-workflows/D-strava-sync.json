@@ -1,0 +1,647 @@
+{
+  "name": "Hyrox - D - Strava Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "b10afa79-7f99-4b29-9719-5f2857a82e32",
+      "name": "Every 2 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -448,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll"
+      },
+      "id": "b8d46cb8-671f-47d9-ac46-d8ce078646ed",
+      "name": "Fetch Strava Activities",
+      "type": "n8n-nodes-base.strava",
+      "typeVersion": 1.1,
+      "position": [
+        -240,
+        160
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "credentials": {
+        "stravaOAuth2Api": {
+          "id": "YY7ao1EAbjKCxzYm",
+          "name": "Strava account - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "bb0b18b1-5a4d-4cfc-b620-945fc386d94a",
+      "name": "Loop Over Activities",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblHOfZ0PU1zGkeLU",
+          "mode": "id"
+        },
+        "filterByFormula": "={{ \"{strava_activity_id} = '\" + String($json.id) + \"'\" }}",
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "id": "2f85c6a3-081b-4405-bbb2-1f3a3dc901d9",
+      "name": "Check if Exists",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        208,
+        256
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "d-if-001",
+              "leftValue": "={{ Object.keys($json).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "58ec5cc9-80de-466f-acd1-87afbc8e2d6a",
+      "name": "Is New Activity?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        432,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblHOfZ0PU1zGkeLU",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ new Date($('Loop Over Activities').first().json.start_date_local).toISOString().slice(0, 10) }}",
+            "activity_type": "={{ $('Loop Over Activities').first().json.type }}",
+            "duration_min": "={{ Math.round($('Loop Over Activities').first().json.moving_time / 60) }}",
+            "distance_km": "={{ Math.round($('Loop Over Activities').first().json.distance / 100) / 10 }}",
+            "avg_heart_rate": "={{ $('Loop Over Activities').first().json.average_heartrate || null }}",
+            "strava_activity_id": "={{ String($('Loop Over Activities').first().json.id) }}",
+            "notes": "={{ $('Loop Over Activities').first().json.name }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "activity_label",
+              "displayName": "activity_label",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "activity_type",
+              "displayName": "activity_type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Todo",
+                  "value": "Todo"
+                },
+                {
+                  "name": "In progress",
+                  "value": "In progress"
+                },
+                {
+                  "name": "Done",
+                  "value": "Done"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "duration_min",
+              "displayName": "duration_min",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "distance_km",
+              "displayName": "distance_km",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "avg_heart_rate",
+              "displayName": "avg_heart_rate",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "perceived_effort",
+              "displayName": "perceived_effort",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "easy",
+                  "value": "easy"
+                },
+                {
+                  "name": "moderate",
+                  "value": "moderate"
+                },
+                {
+                  "name": "hard",
+                  "value": "hard"
+                },
+                {
+                  "name": "max",
+                  "value": "max"
+                },
+                {
+                  "name": "",
+                  "value": ""
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "strava_activity_id",
+              "displayName": "strava_activity_id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "38bb6bce-6a8b-4cf7-bde8-d6491a2ca74b",
+      "name": "Insert Activity",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        656,
+        352
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblCfdZNzkVH3heRm",
+          "mode": "id",
+          "cachedResultName": "training_plan"
+        },
+        "filterByFormula": "={{ \"IS_SAME({date}, '\" + new Date($('Loop Over Activities').first().json.start_date_local).toISOString().slice(0, 10) + \"', 'day')\" }}",
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "id": "1af27642-0cce-4468-872e-0ef1c20a100f",
+      "name": "Find Plan by Date",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        352
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "d-plan-check",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9d444dcc-e6b3-413c-bf8c-cfb18c836071",
+      "name": "Has Matching Plan?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1088,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const activity = $('Loop Over Activities').first().json;\nconst plan = $('Find Plan by Date').first().json;\n\nconst actualType = activity.type || 'Activity';\nconst actualDuration = Math.round((activity.moving_time || 0) / 60);\nconst actualDistance = activity.distance ? (Math.round(activity.distance / 100) / 10) : null;\nconst activityName = activity.name || '';\n\nconst plannedType = plan.session_type || '?';\nconst plannedDuration = plan.duration_min || '?';\nconst existingNotes = plan.notes || '';\n\nconst stravaLine = '✓ Strava: ' + actualType + ' ' + actualDuration + 'min'\n  + (actualDistance ? ' · ' + actualDistance + 'km' : '')\n  + (activityName ? ' — ' + activityName : '')\n  + ' (planned: ' + plannedType + ' ' + plannedDuration + 'min)';\n\nconst newNotes = existingNotes ? existingNotes + '\\n' + stravaLine : stravaLine;\n\nreturn [{ json: { id: plan.id, status: 'done', notes: newNotes } }];"
+      },
+      "id": "f10230b3-e2df-40da-bbce-4b14673f6974",
+      "name": "Build Plan Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblCfdZNzkVH3heRm",
+          "mode": "id",
+          "cachedResultName": "training_plan"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "7251df77-c0d3-40cc-841b-a04233a8fd85",
+      "name": "Update Plan Record",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1536,
+        256
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\n  timestamp: new Date().toISOString(),\n  message: 'Strava sync complete.'\n} }];"
+      },
+      "id": "d59c997e-dc2d-4585-b604-3e4c5f9b7a04",
+      "name": "Log Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        -48
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 2 Hours": {
+      "main": [
+        [
+          {
+            "node": "Fetch Strava Activities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Strava Activities": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Activities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Activities": {
+      "main": [
+        [
+          {
+            "node": "Check if Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Exists": {
+      "main": [
+        [
+          {
+            "node": "Is New Activity?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is New Activity?": {
+      "main": [
+        [
+          {
+            "node": "Insert Activity",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Activities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Activity": {
+      "main": [
+        [
+          {
+            "node": "Find Plan by Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Plan by Date": {
+      "main": [
+        [
+          {
+            "node": "Has Matching Plan?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Matching Plan?": {
+      "main": [
+        [
+          {
+            "node": "Build Plan Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Activities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Plan Update": {
+      "main": [
+        [
+          {
+            "node": "Update Plan Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Plan Record": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Activities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "82fb5948-548d-4765-9085-3d8a3209e0e8",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6d560a8671cba66bb83c5709708889570d8da58c18b1dfc9fa41ebdbb998c2bb"
+  },
+  "id": "lMkmPCETjCiyzAvP",
+  "tags": []
+}

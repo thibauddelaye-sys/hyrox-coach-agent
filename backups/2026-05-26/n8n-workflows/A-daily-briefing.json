@@ -1,0 +1,759 @@
+{
+  "name": "Hyrox - A - Daily Briefing",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "list",
+          "cachedResultName": "Hyrox Coach",
+          "cachedResultUrl": "https://airtable.com/appqP1oYIhYTh1Hgr"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbloi8D9r6OWC5jXp",
+          "mode": "list",
+          "cachedResultName": "athlete_profile",
+          "cachedResultUrl": "https://airtable.com/appqP1oYIhYTh1Hgr/tbloi8D9r6OWC5jXp"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "id": "fb124a4e-59cd-40d7-9606-d72e9019d271",
+      "name": "Read Athlete Profile",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        4768,
+        1328
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblCfdZNzkVH3heRm",
+          "mode": "id"
+        },
+        "filterByFormula": "AND(IS_AFTER({date}, DATEADD(TODAY(), -1, 'days')), IS_BEFORE({date}, DATEADD(TODAY(), 7, 'days')))",
+        "options": {},
+        "sort": {
+          "property": [
+            {
+              "field": "date"
+            }
+          ]
+        }
+      },
+      "id": "f9ca43d7-ebf5-45c8-ab4e-0e304f5f678c",
+      "name": "Read Week Training Plan",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        4944,
+        1328
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $('Read Week Training Plan').all();\nif (items.length === 0) {\n  return [{ json: { week_plan: [], today_session: null } }];\n}\n\nconst todayIso = new Date().toISOString().slice(0, 10);\nconst weekPlan = items\n  .map(i => i.json.fields ?? i.json)\n  .filter(f => f && typeof f.date === 'string');\nconst today = weekPlan.find(d => d.date === todayIso) ?? null;\n\nreturn [{ json: { week_plan: weekPlan, today_session: today } }];"
+      },
+      "id": "790dd378-9616-4a00-aceb-de807d5e6125",
+      "name": "Coalesce Training Plan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5520,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ctx-001",
+              "name": "athlete_name",
+              "value": "={{ $('Read Athlete Profile').first().json.fields.name }}",
+              "type": "string"
+            },
+            {
+              "id": "ctx-002",
+              "name": "phase",
+              "value": "={{ ($json.today_session && $json.today_session.phase) || ($json.week_plan[0] && $json.week_plan[0].phase) || 'Build' }}",
+              "type": "string"
+            },
+            {
+              "id": "ctx-003",
+              "name": "today_session_description",
+              "value": "={{ ($json.today_session && $json.today_session.description) || 'No session planned for today' }}",
+              "type": "string"
+            },
+            {
+              "id": "ctx-004",
+              "name": "today_session_duration",
+              "value": "={{ $json.today_session && $json.today_session.duration_min !== null && $json.today_session.duration_min !== undefined ? String($json.today_session.duration_min) : '' }}",
+              "type": "string"
+            },
+            {
+              "id": "ctx-005",
+              "name": "today_session_intensity",
+              "value": "={{ ($json.today_session && $json.today_session.intensity) || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "ctx-006",
+              "name": "today_date",
+              "value": "={{ $now.toFormat('yyyy-MM-dd') }}",
+              "type": "string"
+            },
+            {
+              "id": "ctx-007",
+              "name": "week_overview",
+              "value": "={{ $json.week_plan.length === 0 ? 'No sessions planned in the next 7 days' : $json.week_plan.map(d => '- ' + d.date + ': ' + (d.session_type || 'unspecified') + ' (' + (d.duration_min || '?') + ' min, ' + (d.intensity || '?') + ') — ' + (d.description || 'no description').substring(0, 80)).join('\\n') }}",
+              "type": "string"
+            },
+            {
+              "id": "6f17f8a4-57bf-44cc-a511-8290c2e014ec",
+              "name": "=calendarcontext",
+              "value": "=={{ $('Read Calendar').all().length === 0 ? 'No events scheduled today' : $('Read Calendar').all().map(e => '- ' + (e.json.summary || 'Untitled') + ' (' + (e.json.start?.dateTime?.substring(11,16) || 'all day') + ')').join('\\n') }}",
+              "type": "string"
+            },
+            {
+              "id": "7561195a-7908-420c-95eb-be1c0b85aadd",
+              "name": "=stravacontext",
+              "value": "=={{ $('Read recent activities').all().length === 0 ? 'No recent activities' : $('Read recent activities').all().map(a => '- ' + a.json.name + ' (' + a.json.type + ', ' + Math.round(a.json.distance / 100) / 10 + ' km, ' + Math.round(a.json.moving_time / 60) + ' min)').join('\\n') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4324188a-f45b-4a74-8eb0-512397d985e4",
+      "name": "Package Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        5728,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Athlete: ' + $json.athlete_name + '\\nPhase: ' + $json.phase + '\\nDate: ' + $json.today_date + '\\nToday session: ' + $json.today_session_description + ($json.today_session_duration ? '\\nDuration: ' + $json.today_session_duration + ' min' : '') + ($json.today_session_intensity ? '\\nIntensity: ' + $json.today_session_intensity : '') + '\\n\\nThis week ahead:\\n' + $json.week_overview + '\\n\\nToday calendar:\\n' + $json.calendarcontext + '\\n\\nRecent training (last activities, oldest to newest):\\n' + $json.stravacontext + '\\n\\nGenerate a 4-section daily brief in markdown.\\n\\nCRITICAL RULES — these are non-negotiable:\\n1. The Workout section MUST reference the calendar above (mention specific event by name if relevant).\\n2. The Workout section SHOULD reference at least one upcoming session from the week ahead (e.g. how todays session prepares for tomorrows long run).\\n3. The Recovery section MUST reference the recent training above (e.g. after the 11km hike, prioritize sleep).\\n4. You MUST use the hyrox_knowledge_base tool at least once for nutrition recommendations.\\n\\n\\u{1F3CB}\\uFE0F *Workout*\\nDescribe the session concretely: what to do, equipment, intent, coaching cues. Start with a timing recommendation based on the calendar. Mention how it fits in the weekly plan.\\n\\n\\u{1F957} *Nutrition*\\n3-4 specific meal suggestions with rough kcal and macro targets, timed around the session. Cite evidence from the knowledge base.\\n\\n\\u{1F4A4} *Recovery and notes*\\n3 bullets MANDATORY:\\n- Hydration target (with numbers)\\n- Sleep target (with numbers)\\n- One specific insight referencing a named activity from the recent training above\\n\\n\\u{1F4DA} *Sources*\\nList the knowledge base sources you used.' }}",
+        "options": {
+          "systemMessage": "You are Hyrox Coach, an AI agent providing personalised training and nutrition coaching to a single athlete preparing for Hyrox races. You combine the role of a strength & conditioning coach, an endurance coach, and a sports nutritionist. In the Briefing role (active now), you produce a structured daily brief. Be specific and numbers-backed — the athlete had months of generic advice; contextual precision is your value. Total response: 200-350 words. Use markdown for structure. Sources: Include this section only if retrieved knowledge base sources were actually used. List 1-3 short bullet points with the source title, document name, or category.\nAlways use hyrox_knowledge_base before writing the brief when the answer may require Hyrox knowledge, nutrition guidance, recovery recommendations, or athlete-specific background not already present in Package Context. Do not invent unsupported facts."
+        }
+      },
+      "id": "b98badd0-0086-4d1e-9f6f-bf4c3a25384a",
+      "name": "Generate Brief",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        6000,
+        1328
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "id"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "99a9084b-b349-4534-9d81-3abaf5fe41f8",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        6000,
+        1520
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YGWEA0vPHv8srLC6",
+          "name": "OpenAI - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "tg-001",
+              "name": "telegram_text",
+              "value": "={{ '\\u2600\\uFE0F Daily Brief \\u2014 ' + $('Package Context').first().json.today_date + '\\n\\n' + $json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "01fe8825-bad1-4239-ad00-cb0dc18ea3a1",
+      "name": "Format for Telegram",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        6288,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "6686274023",
+        "text": "={{ $json.telegram_text }}",
+        "additionalFields": {}
+      },
+      "id": "e3dd106a-45ae-44ab-b0c9-2e5c693179ed",
+      "name": "Send to Athlete",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        6448,
+        1328
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "webhookId": "e964529f-1675-4802-b669-88c60de29182",
+      "credentials": {
+        "telegramApi": {
+          "id": "BPENTF4zNdVV7dTH",
+          "name": "Telegram - Hyrox Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblHOfZ0PU1zGkeLU",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "activity_type": "brief_sent",
+            "notes": "={{ $('Generate Brief').first().json.output }}",
+            "duration_min": 0,
+            "distance_km": 0,
+            "avg_heart_rate": 0
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "activity_label",
+              "displayName": "activity_label",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "daily_logs",
+              "displayName": "daily_logs",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "activity_type",
+              "displayName": "activity_type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Todo",
+                  "value": "Todo"
+                },
+                {
+                  "name": "In progress",
+                  "value": "In progress"
+                },
+                {
+                  "name": "Done",
+                  "value": "Done"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "duration_min",
+              "displayName": "duration_min",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "distance_km",
+              "displayName": "distance_km",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "avg_heart_rate",
+              "displayName": "avg_heart_rate",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "perceived_effort",
+              "displayName": "perceived_effort",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "easy",
+                  "value": "easy"
+                },
+                {
+                  "name": "moderate",
+                  "value": "moderate"
+                },
+                {
+                  "name": "hard",
+                  "value": "hard"
+                },
+                {
+                  "name": "max",
+                  "value": "max"
+                },
+                {
+                  "name": "",
+                  "value": ""
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "strava_activity_id",
+              "displayName": "strava_activity_id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "66bd8599-1ef3-4e0a-927c-37cced8265b0",
+      "name": "Log Brief",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        6656,
+        1328
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 10
+      },
+      "type": "n8n-nodes-base.strava",
+      "typeVersion": 1.1,
+      "position": [
+        5296,
+        1328
+      ],
+      "id": "8292cb9c-abff-4d74-806f-61651b70e0ae",
+      "name": "Read recent activities",
+      "credentials": {
+        "stravaOAuth2Api": {
+          "id": "YY7ao1EAbjKCxzYm",
+          "name": "Strava account - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.rerankerCohere",
+      "typeVersion": 1,
+      "position": [
+        6320,
+        1808
+      ],
+      "id": "963079fd-f24b-49de-9dd0-f6e9e2bbfe2f",
+      "name": "Reranker Cohere",
+      "credentials": {
+        "cohereApi": {
+          "id": "K7YKHElqXH4IjMJC",
+          "name": "Cohere account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Hyrox training knowledge, athlete notes, race strategy, nutrition guidance, recovery recommendations, and background reference material.",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "hyrox-knowledge-base",
+          "mode": "list",
+          "cachedResultName": "hyrox-knowledge-base"
+        },
+        "useReranker": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        6176,
+        1600
+      ],
+      "id": "07f9f585-e076-42be-ac08-9dc732635522",
+      "name": "Hyrox Knowledge Base",
+      "credentials": {
+        "pineconeApi": {
+          "id": "0L1d2Cx1zDbgkcIR",
+          "name": "Pinecone account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        6176,
+        1776
+      ],
+      "id": "9e078d57-5b2e-42ae-bf90-c74e98588f40",
+      "name": "Embeddings OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "YGWEA0vPHv8srLC6",
+          "name": "OpenAI - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "thibaud.delaye@gmail.com",
+          "mode": "list",
+          "cachedResultName": "thibaud.delaye@gmail.com"
+        },
+        "limit": 20,
+        "timeMin": "={{ $now.startOf('day').toISO() }}",
+        "timeMax": "={{ $now.endOf('day').toISO() }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        5120,
+        1328
+      ],
+      "id": "7cda1724-7471-487b-ae0f-ddfb0899f318",
+      "name": "Read Calendar",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "XA0EjQ6GROQRtCYi",
+          "name": "Google Calendar account - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "375bea42-4098-4a72-883e-e9b4e413cb90",
+      "name": "Everyday at 6AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        4608,
+        1328
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Read Athlete Profile": {
+      "main": [
+        [
+          {
+            "node": "Read Week Training Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Week Training Plan": {
+      "main": [
+        [
+          {
+            "node": "Read Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Coalesce Training Plan": {
+      "main": [
+        [
+          {
+            "node": "Package Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Package Context": {
+      "main": [
+        [
+          {
+            "node": "Generate Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Brief",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Brief": {
+      "main": [
+        [
+          {
+            "node": "Format for Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format for Telegram": {
+      "main": [
+        [
+          {
+            "node": "Send to Athlete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Athlete": {
+      "main": [
+        [
+          {
+            "node": "Log Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read recent activities": {
+      "main": [
+        [
+          {
+            "node": "Coalesce Training Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reranker Cohere": {
+      "ai_reranker": [
+        [
+          {
+            "node": "Hyrox Knowledge Base",
+            "type": "ai_reranker",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hyrox Knowledge Base": {
+      "ai_tool": [
+        [
+          {
+            "node": "Generate Brief",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Hyrox Knowledge Base",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Calendar": {
+      "main": [
+        [
+          {
+            "node": "Read recent activities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Everyday at 6AM": {
+      "main": [
+        [
+          {
+            "node": "Read Athlete Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6436ea49-0bf8-4586-8d9f-7457759c4ed1",
+  "meta": {
+    "instanceId": "6d560a8671cba66bb83c5709708889570d8da58c18b1dfc9fa41ebdbb998c2bb"
+  },
+  "id": "sCgwU5ysP4wIqFYt",
+  "tags": []
+}

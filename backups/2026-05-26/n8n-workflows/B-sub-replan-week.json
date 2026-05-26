@@ -1,0 +1,890 @@
+{
+  "name": "Hyrox - B-sub - Replan Week",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "d0fbd056-a561-41e5-8b07-d2732caff6f5",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        5232,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbloi8D9r6OWC5jXp",
+          "mode": "id",
+          "cachedResultName": "athlete_profile"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "id": "ed3846cc-8778-458b-8488-25dfe1673e43",
+      "name": "Read Athlete Profile",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        5440,
+        1280
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblCfdZNzkVH3heRm",
+          "mode": "id"
+        },
+        "filterByFormula": "AND(IS_AFTER({date}, DATEADD(TODAY(), -7, 'days')), IS_BEFORE({date}, DATEADD(TODAY(), 7, 'days')))",
+        "options": {},
+        "sort": {
+          "property": [
+            {
+              "field": "date"
+            }
+          ]
+        }
+      },
+      "id": "f9cf0d6e-26c9-411e-aefc-833bfb17a34f",
+      "name": "Read Existing Week Plan",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        5632,
+        1280
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 10
+      },
+      "id": "65a9590d-8c3f-4af5-975d-d17417424a6c",
+      "name": "Read Recent Strava",
+      "type": "n8n-nodes-base.strava",
+      "typeVersion": 1.1,
+      "position": [
+        5840,
+        1280
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "stravaOAuth2Api": {
+          "id": "YY7ao1EAbjKCxzYm",
+          "name": "Strava account - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const trigger    = $('Execute Workflow Trigger').first().json;\nconst reason     = trigger.reason || 'athlete requested replan';\nconst athleteRaw = $('Read Athlete Profile').first().json;\nconst athlete    = athleteRaw.fields ?? athleteRaw;\nconst planItems  = $('Read Existing Week Plan').all();\nconst stravaAll  = $('Read Recent Strava').all();\n\nconst isoDate = d => d.toISOString().slice(0,10);\nconst today   = new Date();\ntoday.setHours(0,0,0,0);\n\n// Compute phase from target date\nconst rawDate    = athlete.hyrox_target_date || '2026-07-18';\nconst targetDate = new Date(rawDate);\nconst daysToRace = Math.floor((targetDate - today) / (1000*60*60*24));\nconst weeksToRace = Math.ceil(daysToRace / 7);\nlet phase;\nif (weeksToRace <= 2) phase = 'Taper';\nelse if (weeksToRace <= 5) phase = 'Peak';\nelse if (weeksToRace <= 12) phase = 'Build';\nelse phase = 'Base';\nconst totalPrepWeeks = 20;\nconst weekNumber = Math.max(1, totalPrepWeeks - weeksToRace + 1);\n\n// Plan the full Mon-Sun of the target week.\n// If today is Mon or Tue, plan THIS week. Otherwise plan NEXT week.\nconst dayOfWeek = today.getDay(); // 0=Sun, 1=Mon...6=Sat\nconst isEarlyThisWeek = dayOfWeek >= 1 && dayOfWeek <= 2;\nconst daysToMonday = isEarlyThisWeek\n  ? (1 - dayOfWeek)                          // Mon=0, Tue=-1 (back to Mon)\n  : (dayOfWeek === 0 ? 1 : 8 - dayOfWeek);  // next Monday\n\nconst weekStartObj = new Date(today);\nweekStartObj.setDate(today.getDate() + daysToMonday);\n\nconst remaining_dates = Array.from({ length: 7 }, (_, i) => {\n  const d = new Date(weekStartObj);\n  d.setDate(weekStartObj.getDate() + i);\n  return isoDate(d);\n});\n\nconst weekStart = remaining_dates[0];\nconst weekEnd   = remaining_dates[6];\n\n// Sessions that are done/skipped — we do NOT delete these\nconst doneIds    = planItems\n  .filter(i => { const f = i.json.fields ?? i.json; return f.status === 'done' || f.status === 'skipped'; })\n  .map(i => i.json.id)\n  .filter(Boolean);\n\n// Sessions that are planned and fall on remaining dates — candidates for deletion\nconst plannedIds = planItems\n  .filter(i => {\n    const f = i.json.fields ?? i.json;\n    const d = f.date || '';\n    return f.status === 'planned' && remaining_dates.includes(d.substring(0,10));\n  })\n  .map(i => i.json.id)\n  .filter(Boolean);\n\n// Completed sessions summary (for context)\nconst doneSummary = planItems\n  .filter(i => { const f = i.json.fields ?? i.json; return f.status === 'done' || f.status === 'skipped'; })\n  .map(i => { const f = i.json.fields ?? i.json; return '- ' + (f.date||'?') + ': ' + (f.session_type||'?') + ' (' + (f.status||'?') + ')'; })\n  .join('\\n') || 'None so far this week';\n\nconst recentActivity = stravaAll.length === 0\n  ? 'No recent Strava activities'\n  : stravaAll.map(a => '- ' + (a.json.name||'Activity') + ' (' + (a.json.type||'?') + ', ' + Math.round((a.json.distance||0)/100)/10 + 'km, ' + Math.round((a.json.moving_time||0)/60) + 'min, ' + (a.json.start_date_local||'').substring(0,10) + ')').join('\\n');\n\nreturn [{\n  json: {\n    reason, phase, weeks_to_race: weeksToRace, week_number: weekNumber,\n    week_start: weekStart, week_end: weekEnd,\n    remaining_dates, planned_ids_to_delete: plannedIds,\n    done_sessions_summary: doneSummary, recent_strava: recentActivity,\n    athlete_name: athlete.name || 'Athlete',\n    equipment_home: Array.isArray(athlete.equipment_home) ? athlete.equipment_home.join(', ') : (athlete.equipment_home || '')\n  }\n}];"
+      },
+      "id": "9776e748-9829-416f-889b-e6ee94b50f92",
+      "name": "Compute Replan Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6032,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "thibaud.delaye@gmail.com",
+          "mode": "list",
+          "cachedResultName": "thibaud.delaye@gmail.com"
+        },
+        "timeMin": "={{ $json.week_start + \"T00:00:00\" }}",
+        "timeMax": "={{ $json.week_end + \"T23:59:59\" }}",
+        "options": {}
+      },
+      "id": "22b3920c-dfce-4bd8-a864-ac59424b9bcc",
+      "name": "Read Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        6240,
+        1280
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "XA0EjQ6GROQRtCYi",
+          "name": "Google Calendar account - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawItems = $input.all();\nconst calItems = rawItems.filter(i => i.json && i.json.summary);\nconst ctx = $('Compute Replan Window').first().json;\n\nconst calContext = calItems.length === 0\n  ? 'No calendar events in remaining days.'\n  : calItems.map(e => {\n      const startDate = (e.json.start && e.json.start.dateTime)\n        ? e.json.start.dateTime.substring(0,10)\n        : ((e.json.start && e.json.start.date) ? e.json.start.date : '?');\n      const loc = e.json.location ? ' [Location: ' + e.json.location + ']' : '';\n      return startDate + ': ' + (e.json.summary || 'Untitled') + loc;\n    }).join('\\n');\n\nreturn [{\n  json: {\n    ...ctx,\n    calendar_context: calContext\n  }\n}];"
+      },
+      "id": "e449ba2c-a836-4086-bf81-19a77874608c",
+      "name": "Build Replan Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6432,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Athlete: ' + $json.athlete_name + '\\nPhase: ' + $json.phase + ' (Week ' + $json.week_number + ', ' + $json.weeks_to_race + ' weeks to race)' + '\\nReason for replan: ' + $json.reason + '\\nEquipment at home: ' + $json.equipment_home + '\\n\\nRemaining dates to plan (today onwards): ' + JSON.stringify($json.remaining_dates) + '\\n\\nSessions completed this week (DO NOT re-plan these):\\n' + $json.done_sessions_summary + '\\n\\nRecent training:\\n' + $json.recent_strava + '\\n\\nCalendar events (for travel day detection):\\n' + $json.calendar_context + '\\n\\nReplan ONLY the remaining_dates listed above. Produce sessions array + recap.' }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are Hyrox Coach. The athlete has requested a mid-week replan. You receive the remaining unstarted sessions of the current week and must replace them with a better-suited plan given the reason provided, recent fatigue, and any calendar constraints.\n\nRules:\n- Only plan sessions for the dates provided in remaining_dates. Do not plan past dates or future weeks.\n- Respect the athlete's current phase and training load from recent_strava.\n- On travel days (calendar events with non-local locations or travel-related titles): use Active recovery or Z2 endurance, cap at 45min, intensity easy, note \"Travel day\".\n- Provide a 2-3 sentence recap explaining the changes.\n- Use hyrox_knowledge_base to ground recommendations.\n- CHEAT MEAL: Preserve the cheat meal day from the original plan if it hasn't passed yet (default: Saturday). If replanning a cheat meal day, reassign it to Saturday or the nearest social event in the calendar. On cheat meal day: dinner is 'Dinner: Cheat meal -- enjoy freely', add 400-600 kcal above baseline, keep all other slots disciplined, notes: 'Cheat meal day (dinner) -- planned indulgence. Back on track tomorrow morning.'"
+        }
+      },
+      "id": "1296022d-2170-489e-8e53-f9f408cc412a",
+      "name": "Replan AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        6592,
+        1280
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-4o"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "2ec9f894-43a1-46b9-8c2c-ffa002e51704",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        6560,
+        1504
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "openAiApi": {
+          "id": "YGWEA0vPHv8srLC6",
+          "name": "OpenAI - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"required\":[\"sessions\",\"recap\"],\"properties\":{\"sessions\":{\"type\":\"array\",\"minItems\":1,\"items\":{\"type\":\"object\",\"required\":[\"date\",\"phase\",\"week_number\",\"session_type\",\"description\",\"duration_min\",\"intensity\",\"status\"],\"properties\":{\"date\":{\"type\":\"string\",\"format\":\"date\"},\"phase\":{\"type\":\"string\",\"enum\":[\"Base\",\"Build\",\"Peak\",\"Taper\"]},\"week_number\":{\"type\":\"integer\"},\"session_type\":{\"type\":\"string\",\"enum\":[\"Hyrox simulation\",\"Strength\",\"Z2 endurance\",\"Intervals\",\"Long run\",\"Rest\",\"Mobility\",\"Active recovery\"]},\"description\":{\"type\":\"string\"},\"duration_min\":{\"type\":\"integer\"},\"intensity\":{\"type\":\"string\",\"enum\":[\"easy\",\"moderate\",\"hard\",\"max\"]},\"notes\":{\"type\":\"string\"},\"status\":{\"type\":\"string\",\"enum\":[\"planned\"]}}}},\"recap\":{\"type\":\"string\",\"description\":\"Short (2-3 sentences) plain-text summary of the replanned week for the athlete, explaining the main changes and the reasoning behind them.\"}}}"
+      },
+      "id": "38d7512a-f243-4f4e-8e74-fdfa696f2929",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        6640,
+        1680
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Hyrox training knowledge, periodization, nutrition guidance, and recovery recommendations.",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "hyrox-knowledge-base",
+          "mode": "list",
+          "cachedResultName": "hyrox-knowledge-base"
+        },
+        "useReranker": true,
+        "options": {}
+      },
+      "id": "3b9474a6-1038-4ba5-90cc-e2be20bb4a3c",
+      "name": "Hyrox Knowledge Base",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        6816,
+        1520
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "pineconeApi": {
+          "id": "0L1d2Cx1zDbgkcIR",
+          "name": "Pinecone account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "f97d88da-54b5-4bd4-a3d0-9dfa68a0177d",
+      "name": "Reranker Cohere",
+      "type": "@n8n/n8n-nodes-langchain.rerankerCohere",
+      "typeVersion": 1,
+      "position": [
+        7040,
+        1680
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "cohereApi": {
+          "id": "K7YKHElqXH4IjMJC",
+          "name": "Cohere account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "349aa5f3-d6de-4ca8-8fc1-c02a8131aab3",
+      "name": "Embeddings OpenAI",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        6832,
+        1680
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "openAiApi": {
+          "id": "YGWEA0vPHv8srLC6",
+          "name": "OpenAI - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblCfdZNzkVH3heRm",
+          "mode": "id",
+          "cachedResultName": "training_plan"
+        },
+        "filterByFormula": "={{ \"AND({status}='planned', NOT(IS_BEFORE({date}, '\" + $('Compute Replan Window').first().json.week_start + \"')), NOT(IS_AFTER({date}, '\" + $('Compute Replan Window').first().json.week_end + \"')))\" }}",
+        "options": {}
+      },
+      "id": "e56fcb61-dc8d-4ee5-8333-3fb41de1bc38",
+      "name": "Find Planned Remaining Rows",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        6880,
+        1280
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "deleteRecord",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblCfdZNzkVH3heRm",
+          "mode": "id",
+          "cachedResultName": "training_plan"
+        },
+        "id": "={{ $json.id }}"
+      },
+      "id": "7b7f313c-90f2-4f4e-abb0-5a59dc1d6f28",
+      "name": "Delete Planned Remaining Rows",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        7040,
+        1280
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "return [$('Replan AI Agent').first()];"
+      },
+      "id": "90837638-2c75-4f1d-8660-a766b5028907",
+      "name": "Sync After Delete",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7200,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "output.sessions",
+        "options": {}
+      },
+      "id": "128db51f-2cc5-4ab9-9e3c-ba9537cc8e6e",
+      "name": "Split Out Sessions",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        7232,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblCfdZNzkVH3heRm",
+          "mode": "id",
+          "cachedResultName": "training_plan"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ DateTime.fromISO($json.date).toISODate() }}",
+            "phase": "={{ $json.phase }}",
+            "week_number": "={{ parseInt($json.week_number) }}",
+            "session_type": "={{ $json.session_type }}",
+            "description": "={{ $json.description }}",
+            "duration_min": "={{ parseInt($json.duration_min) }}",
+            "intensity": "={{ $json.intensity }}",
+            "notes": "={{ $json.notes || \"\" }}",
+            "status": "planned"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "phase",
+              "displayName": "phase",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "week_number",
+              "displayName": "week_number",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "session_type",
+              "displayName": "session_type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "duration_min",
+              "displayName": "duration_min",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "intensity",
+              "displayName": "intensity",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "b888f91c-f25f-4411-bd31-22b56f482c41",
+      "name": "Insert New Sessions",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        7440,
+        1280
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbljpyctsWcGezqdZ",
+          "mode": "id",
+          "cachedResultName": "nutrition_plans"
+        },
+        "filterByFormula": "={{ \"AND(NOT(IS_BEFORE({date}, '\" + $('Compute Replan Window').first().json.week_start + \"')), NOT(IS_AFTER({date}, '\" + $('Compute Replan Window').first().json.week_end + \"')))\" }}",
+        "options": {}
+      },
+      "id": "f88b4730-e6cd-4116-9f6a-bc5db75feb54",
+      "name": "Find Existing Nutrition Rows",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        7040,
+        1936
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "deleteRecord",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbljpyctsWcGezqdZ",
+          "mode": "id",
+          "cachedResultName": "nutrition_plans"
+        },
+        "id": "={{ $json.id }}"
+      },
+      "id": "987ba7fd-0ee8-4f1c-8dc1-72ace7f5a978",
+      "name": "Delete Existing Nutrition Rows",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        7360,
+        1568
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const agentOutput = $('Replan AI Agent').first().json.output;\nconst sessions = agentOutput.sessions || [];\nconst recap    = agentOutput.recap || 'Week replanned.';\n\nconst sessionLines = sessions.map(s => {\n  const travel = (s.notes && s.notes.indexOf('Travel day') === 0) ? ' (✈️ travel)' : '';\n  return '\\u2022 ' + s.date + travel + ': ' + s.session_type + ' — ' + s.duration_min + 'min, ' + s.intensity;\n}).join('\\n');\n\nreturn [{\n  json: {\n    recap_text: recap + '\\n\\nUpdated sessions:\\n' + sessionLines,\n    sessions_count: sessions.length\n  }\n}];"
+      },
+      "id": "d32c0a23-ee51-4ee2-89c0-a8540a490723",
+      "name": "Build Recap",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7632,
+        1280
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Athlete Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Athlete Profile": {
+      "main": [
+        [
+          {
+            "node": "Read Existing Week Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Existing Week Plan": {
+      "main": [
+        [
+          {
+            "node": "Read Recent Strava",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Recent Strava": {
+      "main": [
+        [
+          {
+            "node": "Compute Replan Window",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Replan Window": {
+      "main": [
+        [
+          {
+            "node": "Read Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Calendar": {
+      "main": [
+        [
+          {
+            "node": "Build Replan Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Replan Context": {
+      "main": [
+        [
+          {
+            "node": "Replan AI Agent",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Find Existing Nutrition Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Existing Nutrition Rows": {
+      "main": [
+        [
+          {
+            "node": "Delete Existing Nutrition Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replan AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Find Planned Remaining Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Planned Remaining Rows": {
+      "main": [
+        [
+          {
+            "node": "Delete Planned Remaining Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Planned Remaining Rows": {
+      "main": [
+        [
+          {
+            "node": "Sync After Delete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync After Delete": {
+      "main": [
+        [
+          {
+            "node": "Split Out Sessions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Sessions": {
+      "main": [
+        [
+          {
+            "node": "Insert New Sessions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert New Sessions": {
+      "main": [
+        [
+          {
+            "node": "Build Recap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Replan AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Replan AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hyrox Knowledge Base": {
+      "ai_tool": [
+        [
+          {
+            "node": "Replan AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reranker Cohere": {
+      "ai_reranker": [
+        [
+          {
+            "node": "Hyrox Knowledge Base",
+            "type": "ai_reranker",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Hyrox Knowledge Base",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "cdc4b6a8-2255-41f2-95f2-dd15d030ffef",
+  "meta": {
+    "instanceId": "6d560a8671cba66bb83c5709708889570d8da58c18b1dfc9fa41ebdbb998c2bb"
+  },
+  "id": "YbtdsdZPKRmcUWYL",
+  "tags": []
+}

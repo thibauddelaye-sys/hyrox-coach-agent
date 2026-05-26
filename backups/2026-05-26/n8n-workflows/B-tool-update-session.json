@@ -1,0 +1,343 @@
+{
+  "name": "Hyrox - B-tool - Update Session",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "6a5ffa02-b0a1-4ed5-9ce0-34c0a8565222",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        2464,
+        1680
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblCfdZNzkVH3heRm",
+          "mode": "id",
+          "cachedResultName": "training_plan"
+        },
+        "filterByFormula": "={{ \"IS_SAME({date}, '\" + ($json.date || (String($json.query || '').match(/\\bdate[^0-9]+(\\d{4}-\\d{2}-\\d{2})/) || String($json.query || '').match(/(\\d{4}-\\d{2}-\\d{2})/) || [])[1] || $now.format('yyyy-MM-dd')) + \"', 'day')\" }}",
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "id": "be5f8595-676a-42a1-b8f6-5a565b54e6b9",
+      "name": "Find Session by Date",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2672,
+        1680
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $('Execute Workflow Trigger').first().json;\nconst found = $input.first().json;\nconst recordId = found.id;\n\nlet input = { ...raw };\n\n// Parse fields from flat query string (n8n toolWorkflow passes everything as one string)\nif (input.query) {\n  const q = String(input.query);\n\n  // Date: explicit 'date: YYYY-MM-DD' label takes priority, then any ISO date in text\n  if (!input.date) {\n    const dateM = q.match(/\\bdate[^0-9]+(\\d{4}-\\d{2}-\\d{2})/) || q.match(/(\\d{4}-\\d{2}-\\d{2})/);\n    if (dateM) input.date = dateM[1];\n  }\n\n  // Duration: 'duration_min: N' or 'Nmin'\n  if (!input.duration_min) {\n    const durM = q.match(/duration_min[^\\d]*(\\d+)/) || q.match(/(\\d+)\\s*min/);\n    if (durM) input.duration_min = parseInt(durM[1]);\n  }\n\n  // Intensity\n  if (!input.intensity) {\n    const intM = q.match(/intensity[^a-z]*(easy|moderate|hard|max)/i) || q.match(/\\b(easy|moderate|hard|max)\\b/i);\n    if (intM) input.intensity = intM[1].toLowerCase();\n  }\n\n  // Session type: text before first '(' in query\n  if (!input.session_type) {\n    const stM = q.match(/^([A-Za-z][A-Za-z0-9 ]+?)\\s*[\\(\\-]/);\n    if (stM) input.session_type = stM[1].trim();\n  }\n\n  // Description: text after ' — ' separator (plan summary format) or quoted\n  if (!input.description) {\n    const descM = q.match(/\\u2014\\s*([\\s\\S]+)/) || q.match(/description[^'\"]*['\"](.+?)['\"]/);\n    if (descM) input.description = descM[1].trim();\n  }\n\n  // Notes\n  if (!input.notes) {\n    const notesM = q.match(/notes[^'\"]*['\"](.+?)['\"]/);\n    if (notesM) input.notes = notesM[1];\n  }\n}\n\n// Final fallback: no date found anywhere — assume today\nif (!input.date) {\n  input.date = new Date().toISOString().slice(0, 10);\n}\n\nif (!recordId) {\n  return [{ json: { id: null, fields: {}, error: 'No session found for date: ' + input.date } }];\n}\n\nconst fields = {};\nif (input.session_type && String(input.session_type).trim() !== '') fields.session_type = String(input.session_type).trim();\nif (input.description && String(input.description).trim() !== '') fields.description = String(input.description).trim();\nif (input.duration_min !== null && input.duration_min !== undefined && input.duration_min !== '') {\n  const d = parseInt(input.duration_min);\n  if (!isNaN(d)) fields.duration_min = d;\n}\nif (input.intensity && String(input.intensity).trim() !== '') fields.intensity = String(input.intensity).trim();\nif (input.notes && String(input.notes).trim() !== '') fields.notes = String(input.notes).trim();\nfields.status = 'modified';\n\nreturn [{ json: { id: recordId, date: input.date, fields } }];"
+      },
+      "id": "15d94618-4dcc-4f3b-931b-393d117e7d89",
+      "name": "Prepare Update Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2864,
+        1680
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prep = $input.first().json;\nconst payload = { id: prep.id };\nObject.assign(payload, prep.fields);\nreturn [{ json: payload }];"
+      },
+      "id": "4064f0af-1d3d-41ec-bc97-315f7cbcb380",
+      "name": "Build Update Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3072,
+        1680
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-id-not-null",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "da67a89b-da5a-4304-b5df-daec79603ce9",
+      "name": "Skip If No Record",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3184,
+        1680
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appqP1oYIhYTh1Hgr",
+          "mode": "id",
+          "cachedResultName": "Hyrox Coach"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblCfdZNzkVH3heRm",
+          "mode": "id",
+          "cachedResultName": "training_plan"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "session_type",
+              "displayName": "session_type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "duration_min",
+              "displayName": "duration_min",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "intensity",
+              "displayName": "intensity",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "69ae3f9a-2b8b-4705-889d-08b70ddc45a8",
+      "name": "Update Session Record",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        3280,
+        1680
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5QYCLBuienKcI9gF",
+          "name": "Airtable - Hyrox Coach"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const prep   = $('Prepare Update Fields').first().json;\nconst update = $input.first().json;\n\nif (prep.error) {\n  return [{ json: { confirmation: 'Could not update: ' + prep.error } }];\n}\n\nconst changed = Object.keys(prep.fields)\n  .filter(k => k !== 'status')\n  .map(k => k + ' → ' + prep.fields[k])\n  .join(', ');\n\nconst msg = changed\n  ? 'Session on ' + prep.date + ' updated: ' + changed + '. Status set to modified.'\n  : 'No changes applied to session on ' + prep.date + ' (all fields were empty).';\n\nreturn [{ json: { confirmation: msg } }];"
+      },
+      "id": "44bf9b52-b2b8-4573-8702-2ed52c2e78dc",
+      "name": "Build Confirmation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3488,
+        1680
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Find Session by Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Session by Date": {
+      "main": [
+        [
+          {
+            "node": "Prepare Update Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Update Fields": {
+      "main": [
+        [
+          {
+            "node": "Build Update Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Update Payload": {
+      "main": [
+        [
+          {
+            "node": "Skip If No Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip If No Record": {
+      "main": [
+        [
+          {
+            "node": "Update Session Record",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Session Record": {
+      "main": [
+        [
+          {
+            "node": "Build Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "695889b3-b0a3-470d-ae18-42fbbce378e6",
+  "meta": {
+    "instanceId": "6d560a8671cba66bb83c5709708889570d8da58c18b1dfc9fa41ebdbb998c2bb"
+  },
+  "id": "nHiy7mloI9vXwv4S",
+  "tags": []
+}
