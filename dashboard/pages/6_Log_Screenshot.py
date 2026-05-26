@@ -23,25 +23,34 @@ from dashboard.lib import airtable_client as db
 
 st.set_page_config(page_title="Log Screenshot · Hyrox Coach", page_icon="📸", layout="wide")
 st.title("📸 Log Screenshot")
-st.caption("Drop a Withings, Strava, or food photo — data is extracted automatically and saved to Airtable.")
+st.caption("Upload a screenshot or take a photo — body metrics, meals, and training summaries are extracted automatically.")
 
-uploaded = st.file_uploader(
-    "Upload screenshot",
-    type=["jpg", "jpeg", "png", "webp"],
-    label_visibility="collapsed",
-)
+tab_upload, tab_camera = st.tabs(["📁 Upload file", "📷 Take photo"])
 
-if not uploaded:
-    st.info("Drag & drop or browse a screenshot to get started.")
+with tab_upload:
+    uploaded = st.file_uploader(
+        "Upload screenshot",
+        type=["jpg", "jpeg", "png", "webp"],
+        label_visibility="collapsed",
+    )
+
+with tab_camera:
+    camera_photo = st.camera_input("Take a photo", label_visibility="collapsed")
+
+source = uploaded or camera_photo
+
+if not source:
+    st.info("Upload a screenshot or take a photo to get started.")
     st.stop()
 
-img_bytes = uploaded.read()
-mime = uploaded.type or "image/jpeg"
+img_bytes = source.read()
+mime = source.type or "image/jpeg"
 data_url = f"data:{mime};base64,{base64.b64encode(img_bytes).decode()}"
 
 col_img, col_result = st.columns([1, 2])
 with col_img:
-    st.image(img_bytes, caption=uploaded.name, use_container_width=True)
+    label = source.name if uploaded else "Camera capture"
+    st.image(img_bytes, caption=label, use_container_width=True)
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
