@@ -86,7 +86,7 @@ def llm(prompt: str, max_tokens: int = 400) -> str:
     return resp.choices[0].message.content.strip()
 
 
-# ── Auto-classify on upload (cached by image fingerprint) ───────────────────
+# ── Auto-classify + date detection on upload (cached by image fingerprint) ───
 img_key = hashlib.md5(img_bytes).hexdigest()
 
 if st.session_state.get("img_key") != img_key:
@@ -103,9 +103,26 @@ if st.session_state.get("img_key") != img_key:
         valid = {"body_metrics", "nutrition"}
         c = raw_cls.strip().lower()
         st.session_state.classification = c if c in valid else "other"
+
+        # For body metrics, attempt to extract the date shown on screen
+        detected = None
+        if st.session_state.classification == "body_metrics":
+            raw_date = vision(
+                "Look at this image. Find any date or timestamp displayed on the screen "
+                "(e.g. on a Withings scale, smartwatch, or app header). "
+                "Return ONLY an ISO date in YYYY-MM-DD format, nothing else. "
+                "If no date is visible, return 'unknown'.",
+                max_tokens=15,
+            )
+            try:
+                detected = date.fromisoformat(raw_date.strip())
+            except Exception:
+                detected = None
+        st.session_state.detected_date = detected
         st.session_state.img_key = img_key
 
-classification = st.session_state.classification
+classification  = st.session_state.classification
+detected_date   = st.session_state.get("detected_date")
 
 # ── Layout ───────────────────────────────────────────────────────────────────
 col_img, col_result = st.columns([1, 2])
@@ -123,6 +140,13 @@ with col_result:
             "Training activities are synced automatically via Strava."
         )
         st.stop()
+
+    # ── Date picker ──────────────────────────────────────────────────────────
+    if classification == "body_metrics" and detected_date:
+        st.caption(f"📅 Date detected from screenshot: **{detected_date.strftime('%A %d %b %Y')}**")
+        log_date = st.date_input("Confirm or change date", value=detected_date)
+    else:
+        log_date = st.date_input("Date", value=date.today())
 
     # Meal-specific fields — only rendered when the image is a meal
     meal_type_override = "lunch"
@@ -159,7 +183,7 @@ with col_result:
                 st.stop()
 
             record = {k: v for k, v in {
-                "date":              date.today().isoformat(),
+                "date":              log_date.isoformat(),
                 "weight_kg":         data.get("weight_kg"),
                 "body_fat_pct":      data.get("body_fat_pct"),
                 "muscle_mass_kg":    data.get("muscle_mass_kg"),
@@ -198,7 +222,7 @@ with col_result:
                 st.stop()
 
             record = {k: v for k, v in {
-                "date":                date.today().isoformat(),
+                "date":                log_date.isoformat(),
                 "meal_type":           meal_type_override,
                 "description":         data.get("description", ""),
                 "estimated_kcal":      data.get("estimated_kcal"),
@@ -225,7 +249,7 @@ with col_result:
 
             st.divider()
             with st.spinner("Assessing meal vs your training day…"):
-                session = db.find_session_by_date(date.today().isoformat())
+                session = db.find_session_by_date(log_date.isoformat())
                 session_context = (
                     f"Today's planned session: {session.get('session_type', session.get('activity_type', 'unknown'))} — "
                     f"{session.get('focus', '')} {session.get('notes', '')}".strip()
